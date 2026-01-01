@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "633801281536",
+    "project_id": "apj-kalam-welfare",
+    "storage_bucket": "apj-kalam-welfare.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:633801281536:android:11ceab517f7f4a471508e5",
+        "android_client_info": {
+          "package_name": "com.apjkalam.welfare.apj_student_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPbxBPWP0m09mTIp7VF2SxzPJcgnXrLW0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

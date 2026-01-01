@@ -1,0 +1,83 @@
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'dev.flutter.flutter-gradle-plugin'
+    id 'com.google.gms.google-services'
+}
+
+/*
+ ❌ REMOVED:
+ keystore.properties loading
+ (kyunki file exist nahi karti aur build fail ho raha tha)
+*/
+
+android {
+    namespace "com.apjkalam.welfare.apj_student_app"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.apjkalam.welfare.apj_student_app"
+        minSdkVersion flutter.minSdkVersion
+        targetSdk 36
+        versionCode 1
+        versionName "1.0.0"
+        multiDexEnabled true
+        manifestPlaceholders = [admob_app_id: ""]
+    }
+
+    // ✅ Flutter + AGP compatible NDK
+    ndkVersion "27.0.12077973"
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+            buildConfigField "String", "FCM_INSTALLATION_ID", "\"DEBUG_TEST_ID\""
+        }
+
+        release {
+            // ✅ TEMPORARY DEBUG SIGNING (Play Store ke time change karenge)
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile(
+                'proguard-android-optimize.txt'
+            ), 'proguard-rules.pro'
+        }
+    }
+
+    // ✅ Safe lint config
+    lint {
+        disable 'LongLogTag'
+        disable 'GradleDependency'
+        disable 'OldTargetApi'
+        disable 'GradleDynamicVersion'
+        checkReleaseBuilds false
+        abortOnError false
+        ignoreWarnings true
+    }
+
+    // ✅ Java 17 (Flutter 3.38 requirement)
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+flutter {
+    source "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation 'com.google.firebase:firebase-messaging:24.1.1'
+    implementation 'androidx.multidex:multidex:2.0.1'
+}
