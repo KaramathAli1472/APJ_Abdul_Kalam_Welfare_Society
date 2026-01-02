@@ -12,7 +12,7 @@ import 'screens/id_card/id_card_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Firebase initialization (ERROR FIX)
+  // ✅ Firebase initialization
   await Firebase.initializeApp();
 
   runApp(const StudentApp());
@@ -26,20 +26,31 @@ class StudentApp extends StatelessWidget {
     return MaterialApp(
       title: 'APJ Student App',
       debugShowCheckedModeBanner: false,
-
+      
+      // Theme setup
+      theme: ThemeData(
+        primaryColor: const Color(0xFF4CAF50),
+        colorScheme: ColorScheme.fromSwatch(
+          primarySwatch: Colors.green,
+          accentColor: const Color(0xFF2196F3),
+        ),
+        fontFamily: 'Roboto',
+        useMaterial3: true,
+      ),
+      
       // 🔐 App start hote hi LOGIN screen
       initialRoute: '/login',
-
+      
       routes: {
         // 🔑 Login Screen
         '/login': (context) => const LoginScreen(),
-
-        // 📝 Login ke baad Registration Form
+        
+        // 📝 Login/Google Sign-in ke baad Registration Form
         '/register': (context) => const RegistrationFormScreen(),
-
+        
         // 🏠 Registration submit ke baad Dashboard
         '/dashboard': (context) => const DashboardScreen(),
-
+        
         // 📚 Other screens
         '/exam': (context) => const ExamScreen(),
         '/result': (context) => const ResultScreen(),

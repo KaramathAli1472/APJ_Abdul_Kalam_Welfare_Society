@@ -12,7 +12,20 @@
           "package_name": "com.apjkalam.welfare.apj_student_app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "633801281536-74haljeb7lqotr068gi0vqbi54ik80af.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apjkalam.welfare.apj_student_app",
+            "certificate_hash": "f78f959b90ddc42850f4494b3b7b61857f40e346"
+          }
+        },
+        {
+          "client_id": "633801281536-sa7r0hj14uvv42sj7lh8cae8ls5hh6di.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBPbxBPWP0m09mTIp7VF2SxzPJcgnXrLW0"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "633801281536-sa7r0hj14uvv42sj7lh8cae8ls5hh6di.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

@@ -37,11 +37,39 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
   int _currentStep = 0;
   bool _paymentMade = false;
   
-  final User? user = FirebaseAuth.instance.currentUser;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final ImagePicker _picker = ImagePicker();
   
   // Step titles
   final List<String> _stepTitles = ['Personal Info', 'Education', 'Contact', 'Payment'];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUserDataFromGoogle();
+    });
+  }
+
+  void _loadUserDataFromGoogle() {
+    final user = _auth.currentUser;
+    
+    if (user != null) {
+      print('=== GOOGLE USER DATA LOADING ===');
+      
+      // Email auto-fill
+      if (user.email != null && emailController.text.isEmpty) {
+        emailController.text = user.email!;
+      }
+      
+      // Name auto-fill
+      if (user.displayName != null && nameController.text.isEmpty) {
+        nameController.text = user.displayName!;
+      }
+    } else {
+      print('⚠️ No user logged in');
+    }
+  }
 
   // Generate Registration Number
   String _generateRegistrationNumber() {
@@ -75,10 +103,17 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
   // Upload Image to Firebase Storage
   Future<String> _uploadImage() async {
     if (_image == null) return '';
+    
     try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        print('User not authenticated for image upload');
+        return '';
+      }
+      
       final storageRef = FirebaseStorage.instance.ref()
           .child('student_photos')
-          .child('${user!.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          .child('${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
       await storageRef.putFile(_image!);
       return await storageRef.getDownloadURL();
     } catch (e) {
@@ -87,109 +122,335 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
     }
   }
 
+  // Show Error
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message), 
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      )
+    );
+  }
+
+  // Show Success
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message), 
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
+      )
+    );
+  }
+
+  // Show QR Code Dialog
+  void _showQRCodeDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        child: SingleChildScrollView(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.qr_code, color: Colors.green.shade700),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Scan QR Code to Pay',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.currency_rupee, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text(
+                        'Registration Fee: ₹200',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                
+                Container(
+                  padding: const EdgeInsets.all(25),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.grey.shade300, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        blurRadius: 15,
+                        spreadRadius: 3,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 250,
+                        height: 250,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.asset(
+                            'assets/qr_code.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey.shade100,
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.qr_code, size: 80, color: Colors.grey.shade400),
+                                      const SizedBox(height: 10),
+                                      const Text(
+                                        'QR Code Image',
+                                        style: TextStyle(color: Colors.grey),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.purple.shade200),
+                        ),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'UPI ID (For Manual Payment)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.purple,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SelectableText(
+                              'apjwelfare@upi',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.purple,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: Colors.yellow.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.yellow.shade300),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '📋 Payment Instructions:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text('1. Open Google Pay, PhonePe or any UPI app'),
+                      Text('2. Tap on "Scan QR Code"'),
+                      Text('3. Point camera at the QR code above'),
+                      Text('4. Pay exact amount: ₹200'),
+                      Text('5. Note down Transaction ID after payment'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          setState(() => _paymentMade = true);
+                          _showSuccess('Please enter Transaction ID after payment.');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text(
+                          'I have Paid',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // Validate current step
   bool _validateCurrentStep() {
     switch (_currentStep) {
       case 0:
-        if (nameController.text.isEmpty) return _showError('Please enter full name');
-        if (gender == null) return _showError('Please select gender');
-        if (selectedDate == null) return _showError('Please select date of birth');
-        if (fatherController.text.isEmpty) return _showError('Please enter father\'s name');
-        if (motherController.text.isEmpty) return _showError('Please enter mother\'s name');
+        if (nameController.text.isEmpty) { _showError('Please enter full name'); return false; }
+        if (gender == null) { _showError('Please select gender'); return false; }
+        if (selectedDate == null) { _showError('Please select date of birth'); return false; }
+        if (fatherController.text.isEmpty) { _showError('Please enter father\'s name'); return false; }
+        if (motherController.text.isEmpty) { _showError('Please enter mother\'s name'); return false; }
         return true;
       case 1:
-        if (schoolController.text.isEmpty) return _showError('Please enter school name');
-        if (gradeController.text.isEmpty) return _showError('Please enter grade/class');
+        if (schoolController.text.isEmpty) { _showError('Please enter school name'); return false; }
+        if (gradeController.text.isEmpty) { _showError('Please enter grade/class'); return false; }
         return true;
       case 2:
-        if (phoneController.text.isEmpty || phoneController.text.length < 10) return _showError('Please enter valid phone number');
-        final email = user?.email ?? emailController.text;
-        if (email.isEmpty || !email.contains('@')) return _showError('Please enter valid email address');
-        if (addressController.text.isEmpty) return _showError('Please enter address');
+        if (phoneController.text.isEmpty || phoneController.text.length < 10) { 
+          _showError('Please enter valid phone number'); 
+          return false; 
+        }
+        
+        final currentUser = _auth.currentUser;
+        final email = currentUser?.email ?? emailController.text;
+        if (email.isEmpty || !email.contains('@')) { 
+          _showError('Please enter valid email address'); 
+          return false; 
+        }
+        
+        if (addressController.text.isEmpty) { 
+          _showError('Please enter address'); 
+          return false; 
+        }
         return true;
       default: return true;
     }
   }
 
-  bool _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red));
-    return false;
-  }
-
-  // Show Payment Dialog
-  void _showPaymentDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Payment Instructions', style: TextStyle(color: Colors.green)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Registration Fee: ₹200', style: TextStyle(fontSize: 18, color: Colors.blue)),
-            const SizedBox(height: 20),
-            _paymentItem('UPI ID', 'apjwelfare@upi', Icons.payment),
-            _paymentItem('Bank', 'State Bank of India', Icons.account_balance),
-            _paymentItem('Account', '123456789012', Icons.credit_card),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.yellow.shade50, borderRadius: BorderRadius.circular(8)),
-              child: const Text('After payment, note Transaction ID and enter it in form.', style: TextStyle(color: Colors.orange)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() => _paymentMade = true);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Payment initiated. Please enter Transaction ID below.'), backgroundColor: Colors.green)
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('I have Paid', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _paymentItem(String title, String value, IconData icon) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)),
-      child: Row(children: [
-        Icon(icon, color: Colors.blue),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        ])),
-      ]),
-    );
-  }
-
-  // Submit Form
+  // ✅✅✅ SUBMIT FORM FIXED ✅✅✅
   Future<void> _submitForm() async {
+    print('=== SUBMIT FORM STARTED ===');
+    
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      _showError('Please login to submit form.');
+      return;
+    }
+
     if (!_validateAllSteps()) return;
-    if (transactionIdController.text.isEmpty) return _showError('Please enter Transaction ID');
+    
+    if (transactionIdController.text.isEmpty) {
+      _showError('Please enter Transaction ID');
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
       registrationNumber = _generateRegistrationNumber();
       final uploadedPhotoUrl = await _uploadImage();
-      final currentUser = FirebaseAuth.instance.currentUser;
       
-      if (currentUser == null) throw Exception('User not authenticated');
-      if (selectedDate == null) throw Exception('Date of birth required');
-      if (gender == null) throw Exception('Gender required');
+      final freshUser = _auth.currentUser;
+      if (freshUser == null) {
+        _showError('Session expired. Please login again.');
+        setState(() => _isLoading = false);
+        return;
+      }
 
-      // Save to students collection
-      await FirebaseFirestore.instance.collection('students').doc(currentUser.uid).set({
+      if (selectedDate == null) {
+        _showError('Date of birth required');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      if (gender == null) {
+        _showError('Gender required');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Save to students collection - WITH ID CARD GENERATED = TRUE
+      final studentData = {
         'name': nameController.text.trim(),
         'gender': gender,
         'dob': selectedDate!.toIso8601String(),
@@ -199,36 +460,64 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
         'grade': gradeController.text.trim(),
         'phone': phoneController.text.trim(),
         'whatsapp': whatsappController.text.isEmpty ? phoneController.text.trim() : whatsappController.text.trim(),
-        'email': currentUser.email ?? emailController.text.trim(),
+        'email': freshUser.email ?? emailController.text.trim(),
         'address': addressController.text.trim(),
         'photoUrl': uploadedPhotoUrl,
         'registrationNumber': registrationNumber,
         'transactionID': transactionIdController.text.trim(),
-        'paymentStatus': transactionIdController.text.isEmpty ? 'pending' : 'verified',
-        'userId': currentUser.uid,
+        'paymentStatus': 'verified',
+        'userId': freshUser.uid,
         'createdAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
         'status': 'active',
-        'idCardGenerated': false,
-      });
+        'idCardGenerated': true, // ✅ ID CARD GENERATED
+        'loginMethod': freshUser.providerData.isNotEmpty 
+            ? freshUser.providerData[0].providerId 
+            : 'email',
+      };
+
+      await FirebaseFirestore.instance
+          .collection('students')
+          .doc(freshUser.uid)
+          .set(studentData, SetOptions(merge: true));
 
       // Save to admin panel
-      await FirebaseFirestore.instance.collection('admin_panel').doc(registrationNumber).set({
+      final adminData = {
         'name': nameController.text.trim(),
         'registrationNumber': registrationNumber,
         'phone': phoneController.text.trim(),
-        'email': currentUser.email ?? emailController.text.trim(),
+        'email': freshUser.email ?? emailController.text.trim(),
         'school': schoolController.text.trim(),
         'grade': gradeController.text.trim(),
-        'paymentStatus': transactionIdController.text.isEmpty ? 'pending' : 'verified',
+        'paymentStatus': 'verified',
         'transactionID': transactionIdController.text.trim(),
         'photoUrl': uploadedPhotoUrl,
-        'userId': currentUser.uid,
+        'userId': freshUser.uid,
         'registrationDate': DateTime.now().toIso8601String(),
-        'status': 'new_registration',
-      });
+        'updatedAt': DateTime.now().toIso8601String(),
+        'status': 'active',
+        'loginMethod': freshUser.providerData.isNotEmpty 
+            ? freshUser.providerData[0].providerId 
+            : 'email',
+      };
+
+      await FirebaseFirestore.instance
+          .collection('admin_panel')
+          .doc(registrationNumber)
+          .set(adminData);
 
       setState(() => _isLoading = false);
-      _showSuccessDialog();
+      
+      // ✅ DIRECT DASHBOARD NAVIGATION
+      print('✅ Registration successful! ID Card generated.');
+      print('✅ Registration Number: $registrationNumber');
+      print('➡️ Navigating to dashboard...');
+      
+      _showSuccess('Registration completed! ID Card generated.');
+      
+      // Direct dashboard navigation
+      Navigator.pushReplacementNamed(context, '/dashboard');
+      
     } catch (e) {
       setState(() => _isLoading = false);
       _showError('Error: ${e.toString()}');
@@ -237,70 +526,80 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
 
   // Validate all steps
   bool _validateAllSteps() {
-    if (nameController.text.isEmpty) return setStepError(0, 'Please enter full name');
-    if (gender == null) return setStepError(0, 'Please select gender');
-    if (selectedDate == null) return setStepError(0, 'Please select date of birth');
-    if (fatherController.text.isEmpty) return setStepError(0, 'Please enter father\'s name');
-    if (motherController.text.isEmpty) return setStepError(0, 'Please enter mother\'s name');
-    if (schoolController.text.isEmpty) return setStepError(1, 'Please enter school name');
-    if (gradeController.text.isEmpty) return setStepError(1, 'Please enter grade/class');
-    if (phoneController.text.isEmpty || phoneController.text.length < 10) return setStepError(2, 'Please enter valid phone number');
-    final email = user?.email ?? emailController.text;
-    if (email.isEmpty || !email.contains('@')) return setStepError(2, 'Please enter valid email address');
-    if (addressController.text.isEmpty) return setStepError(2, 'Please enter address');
+    final currentUser = _auth.currentUser;
+    
+    if (currentUser == null) {
+      _showError('Please login to submit form.');
+      return false;
+    }
+
+    if (nameController.text.isEmpty) {
+      setState(() => _currentStep = 0);
+      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _showError('Please enter full name');
+      return false;
+    }
+    if (gender == null) {
+      setState(() => _currentStep = 0);
+      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _showError('Please select gender');
+      return false;
+    }
+    if (selectedDate == null) {
+      setState(() => _currentStep = 0);
+      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _showError('Please select date of birth');
+      return false;
+    }
+    if (fatherController.text.isEmpty) {
+      setState(() => _currentStep = 0);
+      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _showError('Please enter father\'s name');
+      return false;
+    }
+    if (motherController.text.isEmpty) {
+      setState(() => _currentStep = 0);
+      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _showError('Please enter mother\'s name');
+      return false;
+    }
+    
+    if (schoolController.text.isEmpty) {
+      setState(() => _currentStep = 1);
+      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _showError('Please enter school name');
+      return false;
+    }
+    if (gradeController.text.isEmpty) {
+      setState(() => _currentStep = 1);
+      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _showError('Please enter grade/class');
+      return false;
+    }
+    
+    if (phoneController.text.isEmpty || phoneController.text.length < 10) {
+      setState(() => _currentStep = 2);
+      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _showError('Please enter valid phone number');
+      return false;
+    }
+    
+    final email = currentUser.email ?? emailController.text;
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _currentStep = 2);
+      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _showError('Please enter valid email address');
+      return false;
+    }
+    
+    if (addressController.text.isEmpty) {
+      setState(() => _currentStep = 2);
+      _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _showError('Please enter address');
+      return false;
+    }
+    
     return true;
-  }
-
-  bool setStepError(int step, String message) {
-    setState(() => _currentStep = step);
-    _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-    return _showError(message);
-  }
-
-  // Success Dialog
-  void _showSuccessDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.check_circle, size: 60, color: Colors.green),
-              const SizedBox(height: 20),
-              const Text('Registration Successful!', style: TextStyle(fontSize: 22, color: Colors.green)),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
-                child: Column(children: [
-                  const Text('Registration Number', style: TextStyle(color: Colors.grey)),
-                  const SizedBox(height: 8),
-                  Text(registrationNumber!, style: const TextStyle(fontSize: 24, color: Colors.blue)),
-                ]),
-              ),
-              const SizedBox(height: 20),
-              const Text('Please save this number for future reference.', textAlign: TextAlign.center),
-              const SizedBox(height: 24),
-              Row(children: [
-                Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Copy Number'))),
-                const SizedBox(width: 12),
-                Expanded(child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.pushReplacementNamed(context, '/dashboard');
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50)),
-                  child: const Text('Dashboard', style: TextStyle(color: Colors.white)),
-                )),
-              ]),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   void _nextStep() {
@@ -328,39 +627,105 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = _auth.currentUser;
+    
     return Scaffold(
-      appBar: AppBar(title: const Text('Student Registration'), backgroundColor: Colors.white),
+      appBar: AppBar(
+        title: const Text('Student Registration'), 
+        backgroundColor: Colors.white,
+        elevation: 1,
+        actions: [
+          if (currentUser != null)
+            Tooltip(
+              message: 'Logged in as ${currentUser.email}',
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.green.shade100,
+                  child: Text(
+                    currentUser.email?.substring(0, 1).toUpperCase() ?? 'U',
+                    style: const TextStyle(color: Colors.green),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
       body: _isLoading ? _buildLoader() : Column(children: [
         _buildStepper(),
         Expanded(child: Padding(
           padding: const EdgeInsets.all(16),
           child: SingleChildScrollView(
             controller: _scrollController,
-            child: Form(key: _formKey, child: Column(children: [
-              _buildStepContent(),
-              const SizedBox(height: 40),
-              Row(children: [
-                if (_currentStep > 0) Expanded(child: OutlinedButton(
-                  onPressed: _previousStep,
-                  child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(Icons.arrow_back, size: 20), SizedBox(width: 8), Text('Previous'),
-                  ]),
-                )),
-                if (_currentStep > 0) const SizedBox(width: 12),
-                Expanded(child: ElevatedButton(
-                  onPressed: _currentStep == _stepTitles.length - 1 ? _submitForm : _nextStep,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _currentStep == _stepTitles.length - 1 ? const Color(0xFF4CAF50) : const Color(0xFF2196F3),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Form(
+              key: _formKey, 
+              child: Column(children: [
+                // User info banner
+                if (currentUser != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 20),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: currentUser.providerData.any((userInfo) => 
+                          userInfo.providerId == 'google.com') 
+                        ? Colors.blue.shade50 
+                        : Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: currentUser.providerData.any((userInfo) => 
+                            userInfo.providerId == 'google.com') 
+                          ? Colors.blue.shade200 
+                          : Colors.green.shade200
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.account_circle, 
+                          color: currentUser.providerData.any((userInfo) => 
+                              userInfo.providerId == 'google.com') 
+                            ? Colors.blue 
+                            : Colors.green
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${currentUser.providerData.any((userInfo) => userInfo.providerId == 'google.com') ? '👤 Google User:' : '📧 Email User:'} ${currentUser.email}',
+                                style: TextStyle(
+                                  fontSize: 14, 
+                                  color: currentUser.providerData.any((userInfo) => 
+                                      userInfo.providerId == 'google.com') 
+                                    ? Colors.blue 
+                                    : Colors.green
+                                ),
+                              ),
+                              if (currentUser.displayName != null && currentUser.displayName!.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    'Name: ${currentUser.displayName}',
+                                    style: TextStyle(
+                                      fontSize: 12, 
+                                      color: Colors.grey.shade700
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Text(_currentStep == _stepTitles.length - 1 ? 'Submit Registration' : 'Next'),
-                    if (_currentStep < _stepTitles.length - 1) const SizedBox(width: 8),
-                    if (_currentStep < _stepTitles.length - 1) const Icon(Icons.arrow_forward, size: 20),
-                  ]),
-                )),
-              ]),
-            ])),
+                
+                _buildStepContent(),
+                const SizedBox(height: 40),
+                _buildNavigationButtons(),
+              ])
+            ),
           ),
         )),
       ]),
@@ -368,36 +733,49 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
   }
 
   Widget _buildLoader() {
-    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50))),
-      const SizedBox(height: 20),
-      Text('Submitting Registration...', style: TextStyle(color: Colors.grey.shade600)),
-    ]));
+    return Center(child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50))),
+        const SizedBox(height: 20),
+        Text('Submitting Registration...', style: TextStyle(color: Colors.grey.shade600)),
+      ],
+    ));
   }
 
   Widget _buildStepper() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 4)]),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: List.generate(_stepTitles.length, (index) {
-        final isActive = _currentStep >= index;
-        return Expanded(child: Column(children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isActive ? const Color(0xFF4CAF50) : Colors.grey.shade300,
-              border: Border.all(color: _currentStep == index ? const Color(0xFF4CAF50) : Colors.transparent),
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 4, offset: const Offset(0, 2))]
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: List.generate(_stepTitles.length, (index) {
+          final isActive = _currentStep >= index;
+          return Expanded(child: Column(children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isActive ? const Color(0xFF4CAF50) : Colors.grey.shade300,
+                border: Border.all(color: _currentStep == index ? const Color(0xFF4CAF50) : Colors.transparent),
+              ),
+              child: Icon(_getStepIcon(index), size: 20, color: isActive ? Colors.white : Colors.grey),
             ),
-            child: Icon(_getStepIcon(index), size: 20, color: isActive ? Colors.white : Colors.grey),
-          ),
-          const SizedBox(height: 4),
-          Text(_stepTitles[index], style: TextStyle(
-            fontSize: 12, fontWeight: _currentStep == index ? FontWeight.bold : FontWeight.normal,
-            color: isActive ? const Color(0xFF4CAF50) : Colors.grey,
-          )),
-        ]));
-      })),
+            const SizedBox(height: 4),
+            Text(
+              _stepTitles[index], 
+              style: TextStyle(
+                fontSize: 12, 
+                fontWeight: _currentStep == index ? FontWeight.bold : FontWeight.normal,
+                color: isActive ? const Color(0xFF4CAF50) : Colors.grey,
+              ),
+            ),
+          ]));
+        })
+      ),
     );
   }
 
@@ -421,7 +799,45 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
     }
   }
 
+  Widget _buildNavigationButtons() {
+    final currentUser = _auth.currentUser;
+    
+    return Row(children: [
+      if (_currentStep > 0) Expanded(child: OutlinedButton(
+        onPressed: _previousStep,
+        child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.arrow_back, size: 20), 
+          SizedBox(width: 8), 
+          Text('Previous'),
+        ]),
+      )),
+      if (_currentStep > 0) const SizedBox(width: 12),
+      Expanded(child: ElevatedButton(
+        onPressed: _currentStep == _stepTitles.length - 1 
+          ? (currentUser == null ? () => _showError('Please login to submit form.') : _submitForm)
+          : _nextStep,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _currentStep == _stepTitles.length - 1 ? const Color(0xFF4CAF50) : const Color(0xFF2196F3),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(
+            _currentStep == _stepTitles.length - 1 
+              ? (currentUser == null ? 'Login Required' : 'Submit Registration') 
+              : 'Next', 
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)
+          ),
+          if (_currentStep < _stepTitles.length - 1) const SizedBox(width: 8),
+          if (_currentStep < _stepTitles.length - 1) const Icon(Icons.arrow_forward, size: 20, color: Colors.white),
+        ]),
+      )),
+    ]);
+  }
+
   Widget _buildPersonalInfoStep() {
+    final currentUser = _auth.currentUser;
+    
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Center(child: Column(children: [
         GestureDetector(
@@ -429,11 +845,21 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
           child: CircleAvatar(
             radius: 60,
             backgroundColor: Colors.grey.shade100,
-            backgroundImage: _image != null ? FileImage(_image!) : null,
-            child: _image == null ? const Icon(Icons.camera_alt, size: 40, color: Colors.grey) : null,
+            backgroundImage: _image != null 
+                ? FileImage(_image!)
+                : (currentUser?.photoURL != null 
+                    ? NetworkImage(currentUser!.photoURL!) as ImageProvider
+                    : null),
+            child: _image == null && currentUser?.photoURL == null 
+                ? const Icon(Icons.camera_alt, size: 40, color: Colors.grey) 
+                : null,
           ),
         ),
-        TextButton.icon(onPressed: _pickImage, icon: const Icon(Icons.cloud_upload), label: const Text('Upload Photo')),
+        TextButton.icon(
+          onPressed: _pickImage, 
+          icon: const Icon(Icons.cloud_upload), 
+          label: const Text('Upload Photo')
+        ),
         const SizedBox(height: 20),
       ])),
       _buildTextField(nameController, 'Full Name', Icons.person, true),
@@ -446,10 +872,18 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
         onTap: _selectDate,
         child: Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300), 
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
+          ),
           child: Row(children: [
-            const Icon(Icons.calendar_today), const SizedBox(width: 12),
-            Expanded(child: Text(selectedDate == null ? 'Select Date' : '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}')),
+            const Icon(Icons.calendar_today), 
+            const SizedBox(width: 12),
+            Expanded(child: Text(
+              selectedDate == null ? 'Select Date of Birth' : '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}',
+              style: TextStyle(color: selectedDate == null ? Colors.grey.shade500 : Colors.black),
+            )),
           ]),
         ),
       ),
@@ -472,14 +906,20 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: isSelected ? const Color(0xFF4CAF50) : Colors.grey.shade300),
         ),
-        child: Center(child: Text(text, style: TextStyle(color: isSelected ? const Color(0xFF4CAF50) : Colors.grey.shade700))),
+        child: Center(child: Text(
+          text, 
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: isSelected ? const Color(0xFF4CAF50) : Colors.grey.shade700
+          )
+        )),
       ),
     );
   }
 
   Widget _buildEducationStep() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Educational Details', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+      const Text('Educational Details', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       Text('Enter your current educational information', style: TextStyle(color: Colors.grey.shade600)),
       const SizedBox(height: 32),
@@ -490,8 +930,10 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
   }
 
   Widget _buildContactStep() {
+    final currentUser = _auth.currentUser;
+    
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Contact Information', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+      const Text('Contact Information', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       Text('We\'ll use this information to contact you', style: TextStyle(color: Colors.grey.shade600)),
       const SizedBox(height: 32),
@@ -499,75 +941,157 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
       const SizedBox(height: 20),
       _buildTextField(whatsappController, 'WhatsApp (optional)', Icons.chat, false, TextInputType.phone),
       const SizedBox(height: 20),
-      _buildTextField(emailController, 'Email Address', Icons.email, true, TextInputType.emailAddress, user?.email, user?.email != null),
+      _buildTextField(
+        emailController, 
+        'Email Address', 
+        Icons.email, 
+        true, 
+        TextInputType.emailAddress, 
+        currentUser?.email, 
+        currentUser?.email != null
+      ),
       const SizedBox(height: 20),
-      const Text('Address *', style: TextStyle(color: Colors.grey)),
+      const Text('Address *', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       TextFormField(
         controller: addressController,
-        maxLines: 3,
-        decoration: InputDecoration(hintText: 'Enter your complete address', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+        maxLines: 4,
+        decoration: InputDecoration(
+          hintText: 'Enter your complete address', 
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          contentPadding: const EdgeInsets.all(16),
+        ),
         validator: (value) => value == null || value.isEmpty ? 'Required field' : null,
       ),
     ]);
   }
 
   Widget _buildPaymentStep() {
+    final currentUser = _auth.currentUser;
+    
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Payment Details', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+      const Text('Payment Details', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       Text('Complete your registration by making the payment', style: TextStyle(color: Colors.grey.shade600)),
       const SizedBox(height: 32),
-      _buildTextField(transactionIdController, 'Transaction ID', Icons.receipt_long, false, null, null, false, 'Enter UTR/Transaction number'),
-      const SizedBox(height: 20),
-      if (!_paymentMade) SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _showPaymentDialog,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 18)),
-          icon: const Icon(Icons.payment, color: Colors.white),
-          label: const Text('Pay Now (₹200)', style: TextStyle(color: Colors.white, fontSize: 18)),
-        ),
+      _buildTextField(
+        transactionIdController, 
+        'Transaction ID', 
+        Icons.receipt_long, 
+        true,
+        null, 
+        null, 
+        false, 
+        'Enter UTR/Transaction number'
       ),
+      const SizedBox(height: 20),
+      
+      // Pay Now button
+      if (!_paymentMade)
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: currentUser == null 
+              ? () => _showError('Please login to make payment.')
+              : _showQRCodeDialog,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: currentUser == null ? Colors.grey : Colors.green, 
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: Icon(Icons.qr_code, color: Colors.white, size: 26),
+            label: Text(
+              currentUser == null ? 'Login Required' : 'Pay Now (₹200)', 
+              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
+            ),
+          ),
+        ),
+      
       if (!_paymentMade) const SizedBox(height: 20),
       Container(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.green.shade200)),
+        decoration: BoxDecoration(
+          color: Colors.green.shade50, 
+          borderRadius: BorderRadius.circular(16), 
+          border: Border.all(color: Colors.green.shade200)
+        ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Payment Instructions:', style: TextStyle(fontSize: 18, color: Colors.green)),
-          const SizedBox(height: 15),
-          const Text('• Registration Fee: ₹200'),
-          const Text('• UPI ID: apjwelfare@upi'),
-          const Text('• Bank: State Bank of India'),
-          const Text('• Account: 123456789012'),
-          const SizedBox(height: 15),
+          const Text('Payment Process:', style: TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.yellow.shade50, borderRadius: BorderRadius.circular(8)),
-            child: Text(_paymentMade ? 'Payment initiated! Enter Transaction ID above.' : 'Important: After payment, enter Transaction ID above.',
-              style: TextStyle(color: _paymentMade ? Colors.green : Colors.orange)),
+            decoration: BoxDecoration(
+              color: _paymentMade ? Colors.green.shade50 : Colors.yellow.shade50, 
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _paymentMade ? Colors.green.shade300 : Colors.yellow.shade300),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (currentUser == null)
+                  const Text(
+                    '⚠️ Please login to access payment options.',
+                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                  )
+                else if (_paymentMade)
+                  const Text(
+                    '✅ QR Code scanned successfully!',
+                    style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                  )
+                else
+                  const Text(
+                    '📱 Click "Pay Now" to view QR code',
+                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                  ),
+                const SizedBox(height: 8),
+                Text(
+                  currentUser == null
+                    ? 'You need to be logged in to make payment.'
+                    : (_paymentMade 
+                        ? 'Now enter the Transaction ID above and submit form.' 
+                        : 'Scan QR code with any UPI app and pay ₹200.'),
+                  style: TextStyle(color: currentUser == null ? Colors.orange : (_paymentMade ? Colors.green : Colors.orange)),
+                ),
+              ],
+            ),
           ),
         ]),
       ),
     ]);
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon, bool required,
-      [TextInputType? keyboardType, String? initialValue, bool readOnly = false, String? hintText]) {
+  Widget _buildTextField(
+    TextEditingController controller, 
+    String label, 
+    IconData icon, 
+    bool required,
+    [TextInputType? keyboardType, 
+    String? initialValue, 
+    bool readOnly = false, 
+    String? hintText]
+  ) {
+    if (initialValue != null && controller.text.isEmpty) {
+      controller.text = initialValue;
+    }
+    
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('$label${required ? ' *' : ''}', style: const TextStyle(fontWeight: FontWeight.w600)),
+      Text('$label${required ? ' *' : ''}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       TextFormField(
         controller: controller,
         keyboardType: keyboardType,
-        initialValue: initialValue,
         readOnly: readOnly,
         decoration: InputDecoration(
           hintText: hintText,
           prefixIcon: Icon(icon, color: Colors.grey.shade600),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFF4CAF50), width: 2),
+          ),
           filled: readOnly,
-          fillColor: readOnly ? Colors.grey.shade50 : null,
+          fillColor: readOnly ? Colors.grey.shade50 : Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
         ),
         validator: required ? (value) => value == null || value.isEmpty ? 'Required field' : null : null,
       ),
