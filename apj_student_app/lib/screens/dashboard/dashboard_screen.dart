@@ -10,103 +10,64 @@ class DashboardScreen extends StatelessWidget {
   Future<void> _logout(BuildContext context) async {
     try {
       print('🚪 Starting logout process...');
-      
-      // 1. Get current user
-      final User? currentUser = FirebaseAuth.instance.currentUser;
-      print('👤 Current User: ${currentUser?.email}');
-      print('🔑 Provider: ${currentUser?.providerData.map((p) => p.providerId)}');
-      
-      // 2. Clear SharedPreferences FIRST
-      final prefs = await SharedPreferences.getInstance();
-      final savedEmail = prefs.getString('userEmail');
-      final savedMethod = prefs.getString('loginMethod');
-      
-      print('💾 Saved Email: $savedEmail');
-      print('💾 Login Method: $savedMethod');
-      
-      await prefs.clear();
-      print('✅ SharedPreferences cleared');
-      
-      // 3. Sign out from Firebase Auth
       final FirebaseAuth auth = FirebaseAuth.instance;
-      await auth.signOut();
-      print('✅ Firebase Auth signed out');
-      
-      // 4. Sign out from Google ONLY if Google was used
-      final GoogleSignIn googleSignIn = GoogleSignIn();
-      
-      // Check if Google is signed in
-      final googleUser = await googleSignIn.isSignedIn();
-      print('🔍 Google Signed In: $googleUser');
-      
-      if (googleUser) {
+      final User? currentUser = auth.currentUser;
+      print('👤 Current User: ${currentUser?.email}');
+      print('🔑 Providers: ${currentUser?.providerData.map((p) => p.providerId)}');
+
+      final prefs = await SharedPreferences.getInstance();
+      final savedMethod = prefs.getString('loginMethod');
+      print('💾 Saved loginMethod: $savedMethod');
+
+      // Decide if Google sign-out is required (either provider or saved pref indicates google)
+      final usesGoogle = (currentUser?.providerData.any((p) => p.providerId == 'google.com') ?? false)
+          || (savedMethod == 'google');
+
+      if (usesGoogle) {
+        final googleSignIn = GoogleSignIn();
         try {
+          // Attempt sign out & disconnect to revoke tokens
           await googleSignIn.signOut();
-          print('✅ Google Sign Out successful');
+          await googleSignIn.disconnect();
+          print('✅ Google signOut & disconnect successful');
         } catch (e) {
-          print('⚠️ Google Sign Out error: $e');
-          // Try disconnect
-          try {
-            await googleSignIn.disconnect();
-            print('✅ Google disconnected');
-          } catch (e2) {
-            print('⚠️ Google disconnect error: $e2');
-          }
+          print('⚠️ Google signOut/disconnect error: $e');
         }
+      } else {
+        print('ℹ️ Google sign-in not detected, skipping Google sign-out.');
       }
-      
-      // 5. Force clear Firebase Auth state
+
+      // Sign out from FirebaseAuth
       try {
-        await auth.signOut(); // Double sign out for safety
-        print('✅ Firebase Auth force signed out');
+        await auth.signOut();
+        print('✅ Firebase Auth signed out');
       } catch (e) {
-        print('⚠️ Force sign out error: $e');
+        print('⚠️ Firebase signOut error: $e');
       }
-      
-      print('✅ Logout process completed!');
-      
-      // 6. Show success message
+
+      // Clear SharedPreferences after sign-outs
+      try {
+        await prefs.clear();
+        print('✅ SharedPreferences cleared');
+      } catch (e) {
+        print('⚠️ Error clearing SharedPreferences: $e');
+      }
+
+      // Feedback and navigation
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Logged out successfully'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
+        const SnackBar(content: Text('Logged out successfully'), backgroundColor: Colors.green, duration: Duration(seconds: 2)),
       );
-      
-      // 7. Clear navigation stack and go to login
-      await Future.delayed(const Duration(milliseconds: 300));
-      
-      // ✅ IMPORTANT: Use Navigator properly
-      if (Navigator.canPop(context)) {
-        Navigator.popUntil(context, (route) => route.isFirst);
-      }
-      
-      Navigator.pushNamedAndRemoveUntil(
-        context, 
-        '/login', 
-        (route) => false,
-      );
-      
+
+      // Ensure navigation stack cleared
+      await Future.delayed(const Duration(milliseconds: 200));
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
     } catch (e) {
       print('❌ Logout error: $e');
-      print('❌ Error details: ${e.toString()}');
-      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Logout failed: ${e.toString()}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
+        SnackBar(content: Text('Logout failed: ${e.toString()}'), backgroundColor: Colors.red, duration: const Duration(seconds: 3)),
       );
-      
-      // Even if error, try to navigate to login
       try {
-        Navigator.pushNamedAndRemoveUntil(
-          context, 
-          '/login', 
-          (route) => false,
-        );
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       } catch (e2) {
         print('❌ Navigation error: $e2');
       }
@@ -387,15 +348,7 @@ class DashboardScreen extends StatelessWidget {
                             ],
                           ),
                         ),
-                        IconButton(
-                          onPressed: () => _showLogoutDialog(context),
-                          icon: Icon(
-                            Icons.exit_to_app,
-                            color: Colors.red.shade600,
-                            size: 24,
-                          ),
-                          tooltip: 'Logout',
-                        ),
+                        // ...removed redundant logout button (use PopupMenu logout only)...
                       ],
                     ),
                   );
@@ -461,14 +414,7 @@ class DashboardScreen extends StatelessWidget {
                     color: Colors.purple,
                     route: '/idcard',
                   ),
-                  _dashboardItem(
-                    context,
-                    icon: Icons.logout_outlined,
-                    title: 'Logout',
-                    description: 'Logout from app',
-                    color: Colors.red,
-                    onTap: () => _showLogoutDialog(context),
-                  ),
+                  // ...removed dashboard logout tile (use PopupMenu logout only)...
                 ],
               ),
             ),

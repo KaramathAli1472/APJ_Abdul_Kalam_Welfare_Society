@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:math';
 
 class RegistrationFormScreen extends StatefulWidget {
   const RegistrationFormScreen({super.key});
@@ -36,6 +37,10 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
   String? registrationNumber;
   int _currentStep = 0;
   bool _paymentMade = false;
+  
+  // ✅ NEW: Generated student credentials
+  String? _generatedStudentEmail;
+  String? _generatedStudentPassword;
   
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final ImagePicker _picker = ImagePicker();
@@ -79,6 +84,78 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
     final day = now.day.toString().padLeft(2, '0');
     final random = (1000 + DateTime.now().millisecondsSinceEpoch % 9000).toString();
     return 'APJ$year$month$day$random';
+  }
+
+  // ✅ FIXED: Generate Student Email (Short Format)
+  String _generateStudentEmail(String regNumber) {
+    // Get last 3 digits of registration number
+    String uniqueNumber;
+    if (regNumber.length >= 3) {
+      uniqueNumber = regNumber.substring(regNumber.length - 3);
+    } else {
+      uniqueNumber = regNumber;
+    }
+    
+    // Format: s001@apj.org (Short and professional)
+    return 's$uniqueNumber@apj.org';
+  }
+
+  // ✅ FIXED: Generate Easy-to-Remember Password
+  String _generateStudentPassword(String regNumber) {
+    // Get last 4 digits of registration number
+    String lastDigits;
+    if (regNumber.length >= 4) {
+      lastDigits = regNumber.substring(regNumber.length - 4);
+    } else {
+      lastDigits = regNumber;
+    }
+    
+    // Format: APJ@1234 (Easy to remember)
+    return 'APJ@$lastDigits';
+  }
+
+  // ✅ NEW: Create Firebase Auth Account for Student
+  Future<String> _createStudentAuthAccount(String email, String password) async {
+    try {
+      print('🎯 Creating Firebase Auth account for student...');
+      print('📧 Email: $email');
+      print('🔑 Password: $password');
+      
+      // Create user in Firebase Auth
+      final UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      
+      print('✅ Firebase Auth account created successfully!');
+      print('🆔 Student UID: ${userCredential.user!.uid}');
+      
+      // Update student profile with display name
+      await userCredential.user!.updateDisplayName(nameController.text.trim());
+      
+      return userCredential.user!.uid;
+    } catch (e) {
+      print('❌ Error creating Firebase Auth account: $e');
+      
+      // If email already exists, try with different email
+      if (e.toString().contains('email-already-in-use')) {
+        // Generate alternative email with different number
+        final baseEmail = email.split('@')[0];
+        final timestamp = DateTime.now().millisecondsSinceEpoch % 10000;
+        final alternativeEmail = '${baseEmail}_$timestamp@apj.org';
+        print('🔄 Email already exists, trying alternative: $alternativeEmail');
+        
+        final alternativeCredential = await _auth.createUserWithEmailAndPassword(
+          email: alternativeEmail,
+          password: password,
+        );
+        
+        await alternativeCredential.user!.updateDisplayName(nameController.text.trim());
+        return alternativeCredential.user!.uid;
+      }
+      
+      throw e;
+    }
   }
 
   // Select Date of Birth
@@ -144,6 +221,319 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
     );
   }
 
+  // ✅ FIXED: Show Student Credentials Dialog (WITHOUT OVERFLOW)
+  void _showStudentCredentialsDialog(String email, String password) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        child: SingleChildScrollView( // ✅ ADDED SingleChildScrollView
+          child: Container(
+            padding: const EdgeInsets.all(20), // ✅ REDUCED padding
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Success Icon
+                Container(
+                  width: 70, // ✅ REDUCED size
+                  height: 70,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.green.shade50,
+                    border: Border.all(color: Colors.green.shade200, width: 2),
+                  ),
+                  child: const Icon(
+                    Icons.check_circle,
+                    size: 40, // ✅ REDUCED size
+                    color: Colors.green,
+                  ),
+                ),
+                
+                const SizedBox(height: 15),
+                
+                // Title
+                const Text(
+                  '🎉 Registration Successful!',
+                  style: TextStyle(
+                    fontSize: 18, // ✅ REDUCED font size
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                
+                const SizedBox(height: 8),
+                
+                Text(
+                  'Your ID Card No: $registrationNumber',
+                  style: TextStyle(
+                    fontSize: 14, // ✅ REDUCED font size
+                    color: Colors.blue.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                
+                const SizedBox(height: 15),
+                
+                // Important Note
+                Container(
+                  padding: const EdgeInsets.all(12), // ✅ REDUCED padding
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'IMPORTANT: Save login details',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange,
+                                fontSize: 14, // ✅ REDUCED font size
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'You need these credentials to login.',
+                        style: TextStyle(color: Colors.orange.shade800, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 15),
+                
+                // Credentials Box
+                Container(
+                  padding: const EdgeInsets.all(15), // ✅ REDUCED padding
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.blue.shade200, width: 1.5),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Email
+                      const Text(
+                        '📧 Student Email:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14, // ✅ REDUCED font size
+                          color: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.all(10), // ✅ REDUCED padding
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: SingleChildScrollView( // ✅ ADDED for long email
+                                scrollDirection: Axis.horizontal,
+                                child: SelectableText(
+                                  email,
+                                  style: const TextStyle(
+                                    fontSize: 14, // ✅ REDUCED font size
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.content_copy, color: Colors.blue, size: 20),
+                              onPressed: () {
+                                _copyToClipboard(email, 'Email');
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 12),
+                      
+                      // Password
+                      const Text(
+                        '🔐 Password:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14, // ✅ REDUCED font size
+                          color: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.all(10), // ✅ REDUCED padding
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: SingleChildScrollView( // ✅ ADDED for long password
+                                scrollDirection: Axis.horizontal,
+                                child: SelectableText(
+                                  password,
+                                  style: const TextStyle(
+                                    fontSize: 14, // ✅ REDUCED font size
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.content_copy, color: Colors.red, size: 20),
+                              onPressed: () {
+                                _copyToClipboard(password, 'Password');
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 15),
+                
+                // Instructions
+                Container(
+                  padding: const EdgeInsets.all(12), // ✅ REDUCED padding
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '📝 How to Login:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text('1. Go to Login Screen', style: TextStyle(color: Colors.green.shade800, fontSize: 11)),
+                      Text('2. Select "Email Login"', style: TextStyle(color: Colors.green.shade800, fontSize: 11)),
+                      Text('3. Enter the Email above', style: TextStyle(color: Colors.green.shade800, fontSize: 11)),
+                      Text('4. Enter the Password above', style: TextStyle(color: Colors.green.shade800, fontSize: 11)),
+                      Text('5. Click "SIGN IN"', style: TextStyle(color: Colors.green.shade800, fontSize: 11)),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 15),
+                
+                // Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          _shareCredentials(email, password);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12), // ✅ REDUCED padding
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.share, size: 18),
+                            SizedBox(width: 6),
+                            Text('Share', style: TextStyle(fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.pushReplacementNamed(context, '/dashboard');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          padding: const EdgeInsets.symmetric(vertical: 12), // ✅ REDUCED padding
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('Dashboard', style: TextStyle(fontSize: 13)),
+                            SizedBox(width: 6),
+                            Icon(Icons.arrow_forward, size: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ NEW: Copy to Clipboard
+  void _copyToClipboard(String text, String label) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$label copied to clipboard'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      )
+    );
+  }
+
+  // ✅ NEW: Share Credentials
+  void _shareCredentials(String email, String password) {
+    final shareText = '''
+🎓 APJ Student Account Credentials
+
+📧 Email: $email
+🔐 Password: $password
+🎫 ID Card No: $registrationNumber
+
+Note: Use these credentials to login to your student account.
+''';
+    
+    _copyToClipboard(shareText, 'All credentials');
+    _showSuccess('All credentials copied to clipboard!');
+  }
+
   // Show QR Code Dialog
   void _showQRCodeDialog() {
     showDialog(
@@ -173,7 +563,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                         child: Text(
                           'Scan QR Code to Pay',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16, // ✅ REDUCED
                             fontWeight: FontWeight.bold,
                             color: Colors.green,
                           ),
@@ -182,10 +572,10 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
                 
                 Container(
-                  padding: const EdgeInsets.all(25),
+                  padding: const EdgeInsets.all(20), // ✅ REDUCED
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(15),
@@ -193,23 +583,23 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                     boxShadow: [
                       BoxShadow(
                         color: Colors.grey.withOpacity(0.2),
-                        blurRadius: 15,
-                        spreadRadius: 3,
+                        blurRadius: 10,
+                        spreadRadius: 2,
                       ),
                     ],
                   ),
                   child: Column(
                     children: [
                       Container(
-                        width: 250,
-                        height: 250,
+                        width: 220, // ✅ REDUCED
+                        height: 220,
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.grey.shade200),
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(8),
                           child: Image.asset(
                             'assets/images/qr_code.png',
                             fit: BoxFit.contain,
@@ -220,11 +610,11 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.qr_code, size: 80, color: Colors.grey.shade400),
-                                      const SizedBox(height: 10),
+                                      Icon(Icons.qr_code, size: 60, color: Colors.grey.shade400),
+                                      const SizedBox(height: 8),
                                       const Text(
                                         'QR Code Image',
-                                        style: TextStyle(color: Colors.grey),
+                                        style: TextStyle(color: Colors.grey, fontSize: 12),
                                       ),
                                     ],
                                   ),
@@ -234,13 +624,13 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 15),
                       
                       Container(
-                        padding: const EdgeInsets.all(15),
+                        padding: const EdgeInsets.all(12), // ✅ REDUCED
                         decoration: BoxDecoration(
                           color: Colors.yellow.shade50,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.yellow.shade300),
                         ),
                         child: const Column(
@@ -251,18 +641,19 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: Colors.orange,
+                                fontSize: 14,
                               ),
                             ),
-                            SizedBox(height: 8),
-                            Text('1. Open Google Pay, PhonePe or any UPI app'),
-                            Text('2. Tap on "Scan QR Code"'),
-                            Text('3. Point camera at the QR code above'),
-                            Text('4. Pay exact amount: ₹200'),
-                            Text('5. Note down Transaction ID after payment'),
+                            SizedBox(height: 6),
+                            Text('1. Open Google Pay, PhonePe or any UPI app', style: TextStyle(fontSize: 12)),
+                            Text('2. Tap on "Scan QR Code"', style: TextStyle(fontSize: 12)),
+                            Text('3. Point camera at the QR code above', style: TextStyle(fontSize: 12)),
+                            Text('4. Pay exact amount: ₹200', style: TextStyle(fontSize: 12)),
+                            Text('5. Note down Transaction ID after payment', style: TextStyle(fontSize: 12)),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 15),
                       
                       Row(
                         children: [
@@ -270,15 +661,15 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                             child: OutlinedButton(
                               onPressed: () => Navigator.pop(context),
                               style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              child: const Text('Cancel'),
+                              child: const Text('Cancel', style: TextStyle(fontSize: 13)),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: ElevatedButton(
                               onPressed: () {
@@ -291,13 +682,14 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
                               ),
                               child: const Text(
                                 'I have Paid',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
+                                  fontSize: 13,
                                 ),
                               ),
                             ),
@@ -351,7 +743,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
     }
   }
 
-  // ✅✅✅ SUBMIT FORM FIXED ✅✅✅
+  // ✅✅✅ FIXED: SUBMIT FORM WITH STUDENT CREDENTIALS ✅✅✅
   Future<void> _submitForm() async {
     print('=== SUBMIT FORM STARTED ===');
     
@@ -371,16 +763,27 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Step 1: Generate Registration Number
       registrationNumber = _generateRegistrationNumber();
+      
+      // Step 2: Generate Student Email and Password (SHORT FORMAT)
+      _generatedStudentEmail = _generateStudentEmail(registrationNumber!);
+      _generatedStudentPassword = _generateStudentPassword(registrationNumber!);
+      
+      print('📝 Generated Student Credentials:');
+      print('📧 Email: $_generatedStudentEmail');       // e.g., s001@apj.org
+      print('🔑 Password: $_generatedStudentPassword'); // e.g., APJ@1234
+      print('🎫 Registration No: $registrationNumber'); // e.g., APJ241215001
+
+      // Step 3: Create Firebase Auth Account for Student
+      final studentAuthUid = await _createStudentAuthAccount(
+        _generatedStudentEmail!, 
+        _generatedStudentPassword!
+      );
+
+      // Step 4: Upload Photo
       final uploadedPhotoUrl = await _uploadImage();
       
-      final freshUser = _auth.currentUser;
-      if (freshUser == null) {
-        _showError('Session expired. Please login again.');
-        setState(() => _isLoading = false);
-        return;
-      }
-
       if (selectedDate == null) {
         _showError('Date of birth required');
         setState(() => _isLoading = false);
@@ -393,7 +796,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
         return;
       }
 
-      // Save to students collection - WITH ID CARD GENERATED = TRUE
+      // Step 5: Save to students collection
       final studentData = {
         'name': nameController.text.trim(),
         'gender': gender,
@@ -404,45 +807,50 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
         'grade': gradeController.text.trim(),
         'phone': phoneController.text.trim(),
         'whatsapp': whatsappController.text.isEmpty ? phoneController.text.trim() : whatsappController.text.trim(),
-        'email': freshUser.email ?? emailController.text.trim(),
+        'email': _generatedStudentEmail, // ✅ Student's login email
         'address': addressController.text.trim(),
         'photoUrl': uploadedPhotoUrl,
         'registrationNumber': registrationNumber,
         'transactionID': transactionIdController.text.trim(),
+        'studentEmail': _generatedStudentEmail, // For reference
+        'studentPassword': _generatedStudentPassword, // Store encrypted in production
+        'studentAuthUid': studentAuthUid, // Firebase Auth UID
+        'parentEmail': currentUser.email ?? emailController.text.trim(), // Parent/guardian email
         'paymentStatus': 'verified',
-        'userId': freshUser.uid,
+        'parentUserId': currentUser.uid, // Parent's Firebase UID
         'createdAt': DateTime.now().toIso8601String(),
         'updatedAt': DateTime.now().toIso8601String(),
         'status': 'active',
-        'idCardGenerated': true, // ✅ ID CARD GENERATED
-        'loginMethod': freshUser.providerData.isNotEmpty 
-            ? freshUser.providerData[0].providerId 
-            : 'email',
+        'idCardGenerated': true,
+        'loginMethod': 'email',
+        'accountType': 'student',
       };
 
       await FirebaseFirestore.instance
           .collection('students')
-          .doc(freshUser.uid)
+          .doc(studentAuthUid) // ✅ Use student's auth UID as document ID
           .set(studentData, SetOptions(merge: true));
 
-      // Save to admin panel
+      // Step 6: Save to admin panel
       final adminData = {
         'name': nameController.text.trim(),
         'registrationNumber': registrationNumber,
         'phone': phoneController.text.trim(),
-        'email': freshUser.email ?? emailController.text.trim(),
+        'email': _generatedStudentEmail,
         'school': schoolController.text.trim(),
         'grade': gradeController.text.trim(),
         'paymentStatus': 'verified',
         'transactionID': transactionIdController.text.trim(),
         'photoUrl': uploadedPhotoUrl,
-        'userId': freshUser.uid,
+        'studentEmail': _generatedStudentEmail,
+        'studentAuthUid': studentAuthUid,
+        'parentEmail': currentUser.email ?? emailController.text.trim(),
+        'parentUserId': currentUser.uid,
         'registrationDate': DateTime.now().toIso8601String(),
         'updatedAt': DateTime.now().toIso8601String(),
         'status': 'active',
-        'loginMethod': freshUser.providerData.isNotEmpty 
-            ? freshUser.providerData[0].providerId 
-            : 'email',
+        'loginMethod': 'email',
+        'accountType': 'student',
       };
 
       await FirebaseFirestore.instance
@@ -450,17 +858,33 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
           .doc(registrationNumber)
           .set(adminData);
 
+      // Step 7: Save parent-student relationship
+      await FirebaseFirestore.instance
+          .collection('parent_students')
+          .doc(currentUser.uid)
+          .set({
+            'parentId': currentUser.uid,
+            'parentEmail': currentUser.email,
+            'students': FieldValue.arrayUnion([{
+              'studentId': studentAuthUid,
+              'studentEmail': _generatedStudentEmail,
+              'registrationNumber': registrationNumber,
+              'name': nameController.text.trim(),
+              'addedAt': DateTime.now().toIso8601String(),
+            }])
+          }, SetOptions(merge: true));
+
       setState(() => _isLoading = false);
       
-      // ✅ DIRECT DASHBOARD NAVIGATION
-      print('✅ Registration successful! ID Card generated.');
-      print('✅ Registration Number: $registrationNumber');
-      print('➡️ Navigating to dashboard...');
+      // ✅ SUCCESS: Show credentials dialog
+      print('✅ Registration successful!');
+      print('✅ ID Card No: $registrationNumber');
+      print('✅ Student can login with: $_generatedStudentEmail');
       
       _showSuccess('Registration completed! ID Card generated.');
       
-      // Direct dashboard navigation
-      Navigator.pushReplacementNamed(context, '/dashboard');
+      // Show credentials dialog - user MUST see this
+      _showStudentCredentialsDialog(_generatedStudentEmail!, _generatedStudentPassword!);
       
     } catch (e) {
       setState(() => _isLoading = false);
@@ -585,11 +1009,11 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
               child: Padding(
                 padding: const EdgeInsets.only(right: 16),
                 child: CircleAvatar(
-                  radius: 16,
+                  radius: 14, // ✅ REDUCED
                   backgroundColor: Colors.green.shade100,
                   child: Text(
                     currentUser.email?.substring(0, 1).toUpperCase() ?? 'U',
-                    style: const TextStyle(color: Colors.green),
+                    style: const TextStyle(color: Colors.green, fontSize: 12),
                   ),
                 ),
               ),
@@ -598,80 +1022,85 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
       ),
       body: _isLoading ? _buildLoader() : Column(children: [
         _buildStepper(),
-        Expanded(child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SingleChildScrollView(
-            controller: _scrollController,
-            child: Form(
-              key: _formKey, 
-              child: Column(children: [
-                // User info banner
-                if (currentUser != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 20),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: currentUser.providerData.any((userInfo) => 
-                          userInfo.providerId == 'google.com') 
-                        ? Colors.blue.shade50 
-                        : Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: currentUser.providerData.any((userInfo) => 
-                            userInfo.providerId == 'google.com') 
-                          ? Colors.blue.shade200 
-                          : Colors.green.shade200
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.account_circle, 
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(12), // ✅ REDUCED padding
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              child: Form(
+                key: _formKey, 
+                child: Column(
+                  children: [
+                    // User info banner
+                    if (currentUser != null)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 15), // ✅ REDUCED
+                        padding: const EdgeInsets.all(10), // ✅ REDUCED
+                        decoration: BoxDecoration(
                           color: currentUser.providerData.any((userInfo) => 
                               userInfo.providerId == 'google.com') 
-                            ? Colors.blue 
-                            : Colors.green
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${currentUser.providerData.any((userInfo) => userInfo.providerId == 'google.com') ? '👤 Google User:' : '📧 Email User:'} ${currentUser.email}',
-                                style: TextStyle(
-                                  fontSize: 14, 
-                                  color: currentUser.providerData.any((userInfo) => 
-                                      userInfo.providerId == 'google.com') 
-                                    ? Colors.blue 
-                                    : Colors.green
-                                ),
-                              ),
-                              if (currentUser.displayName != null && currentUser.displayName!.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Text(
-                                    'Name: ${currentUser.displayName}',
-                                    style: TextStyle(
-                                      fontSize: 12, 
-                                      color: Colors.grey.shade700
-                                    ),
-                                  ),
-                                ),
-                            ],
+                            ? Colors.blue.shade50 
+                            : Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: currentUser.providerData.any((userInfo) => 
+                                userInfo.providerId == 'google.com') 
+                              ? Colors.blue.shade200 
+                              : Colors.green.shade200
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                
-                _buildStepContent(),
-                const SizedBox(height: 40),
-                _buildNavigationButtons(),
-              ])
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.account_circle, 
+                              size: 20, // ✅ REDUCED
+                              color: currentUser.providerData.any((userInfo) => 
+                                  userInfo.providerId == 'google.com') 
+                                ? Colors.blue 
+                                : Colors.green
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${currentUser.providerData.any((userInfo) => userInfo.providerId == 'google.com') ? 'Google User:' : 'Email User:'} ${currentUser.email}',
+                                    style: TextStyle(
+                                      fontSize: 12, // ✅ REDUCED
+                                      color: currentUser.providerData.any((userInfo) => 
+                                          userInfo.providerId == 'google.com') 
+                                        ? Colors.blue 
+                                        : Colors.green
+                                    ),
+                                  ),
+                                  if (currentUser.displayName != null && currentUser.displayName!.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        'Name: ${currentUser.displayName}',
+                                        style: TextStyle(
+                                          fontSize: 10, 
+                                          color: Colors.grey.shade700
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    
+                    _buildStepContent(),
+                    const SizedBox(height: 30), // ✅ REDUCED
+                    _buildNavigationButtons(),
+                  ]
+                )
+              ),
             ),
           ),
-        )),
+        ),
       ]),
     );
   }
@@ -681,18 +1110,22 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50))),
-        const SizedBox(height: 20),
-        Text('Submitting Registration...', style: TextStyle(color: Colors.grey.shade600)),
+        const SizedBox(height: 15),
+        Text('Creating Student Account...', style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+        if (_generatedStudentEmail != null) ...[
+          const SizedBox(height: 8),
+          Text('Email: $_generatedStudentEmail', style: const TextStyle(color: Colors.blue, fontSize: 12)),
+        ],
       ],
     ));
   }
 
   Widget _buildStepper() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 12), // ✅ REDUCED
       decoration: BoxDecoration(
         color: Colors.white, 
-        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 4, offset: const Offset(0, 2))]
+        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 2, offset: const Offset(0, 1))]
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -700,19 +1133,20 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
           final isActive = _currentStep >= index;
           return Expanded(child: Column(children: [
             Container(
-              width: 36, height: 36,
+              width: 32, // ✅ REDUCED
+              height: 32,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isActive ? const Color(0xFF4CAF50) : Colors.grey.shade300,
                 border: Border.all(color: _currentStep == index ? const Color(0xFF4CAF50) : Colors.transparent),
               ),
-              child: Icon(_getStepIcon(index), size: 20, color: isActive ? Colors.white : Colors.grey),
+              child: Icon(_getStepIcon(index), size: 18, color: isActive ? Colors.white : Colors.grey),
             ),
             const SizedBox(height: 4),
             Text(
               _stepTitles[index], 
               style: TextStyle(
-                fontSize: 12, 
+                fontSize: 10, // ✅ REDUCED
                 fontWeight: _currentStep == index ? FontWeight.bold : FontWeight.normal,
                 color: isActive ? const Color(0xFF4CAF50) : Colors.grey,
               ),
@@ -750,30 +1184,30 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
       if (_currentStep > 0) Expanded(child: OutlinedButton(
         onPressed: _previousStep,
         child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.arrow_back, size: 20), 
-          SizedBox(width: 8), 
-          Text('Previous'),
+          Icon(Icons.arrow_back, size: 18), 
+          SizedBox(width: 6), 
+          Text('Previous', style: TextStyle(fontSize: 13)),
         ]),
       )),
-      if (_currentStep > 0) const SizedBox(width: 12),
+      if (_currentStep > 0) const SizedBox(width: 10),
       Expanded(child: ElevatedButton(
         onPressed: _currentStep == _stepTitles.length - 1 
           ? (currentUser == null ? () => _showError('Please login to submit form.') : _submitForm)
           : _nextStep,
         style: ElevatedButton.styleFrom(
           backgroundColor: _currentStep == _stepTitles.length - 1 ? const Color(0xFF4CAF50) : const Color(0xFF2196F3),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(vertical: 14), // ✅ REDUCED
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Text(
             _currentStep == _stepTitles.length - 1 
               ? (currentUser == null ? 'Login Required' : 'Submit Registration') 
               : 'Next', 
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)
           ),
-          if (_currentStep < _stepTitles.length - 1) const SizedBox(width: 8),
-          if (_currentStep < _stepTitles.length - 1) const Icon(Icons.arrow_forward, size: 20, color: Colors.white),
+          if (_currentStep < _stepTitles.length - 1) const SizedBox(width: 6),
+          if (_currentStep < _stepTitles.length - 1) const Icon(Icons.arrow_forward, size: 18, color: Colors.white),
         ]),
       )),
     ]);
@@ -787,7 +1221,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
         GestureDetector(
           onTap: _pickImage,
           child: CircleAvatar(
-            radius: 60,
+            radius: 50, // ✅ REDUCED
             backgroundColor: Colors.grey.shade100,
             backgroundImage: _image != null 
                 ? FileImage(_image!)
@@ -795,45 +1229,45 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                     ? NetworkImage(currentUser!.photoURL!) as ImageProvider
                     : null),
             child: _image == null && currentUser?.photoURL == null 
-                ? const Icon(Icons.camera_alt, size: 40, color: Colors.grey) 
+                ? const Icon(Icons.camera_alt, size: 30, color: Colors.grey) 
                 : null,
           ),
         ),
         TextButton.icon(
           onPressed: _pickImage, 
-          icon: const Icon(Icons.cloud_upload), 
-          label: const Text('Upload Photo')
+          icon: const Icon(Icons.cloud_upload, size: 18), 
+          label: const Text('Upload Photo', style: TextStyle(fontSize: 13))
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 15),
       ])),
       _buildTextField(nameController, 'Full Name', Icons.person, true),
-      const SizedBox(height: 16),
-      const Text('Gender *', style: TextStyle(color: Colors.grey)),
+      const SizedBox(height: 12),
+      const Text('Gender *', style: TextStyle(color: Colors.grey, fontSize: 13)),
       Row(children: ['Male', 'Female', 'Other'].map((text) => Expanded(child: _genderButton(text))).toList()),
-      const SizedBox(height: 16),
-      const Text('Date of Birth *', style: TextStyle(color: Colors.grey)),
+      const SizedBox(height: 12),
+      const Text('Date of Birth *', style: TextStyle(color: Colors.grey, fontSize: 13)),
       InkWell(
         onTap: _selectDate,
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             border: Border.all(color: Colors.grey.shade300), 
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
             color: Colors.white,
           ),
           child: Row(children: [
-            const Icon(Icons.calendar_today), 
-            const SizedBox(width: 12),
+            const Icon(Icons.calendar_today, size: 18), 
+            const SizedBox(width: 10),
             Expanded(child: Text(
               selectedDate == null ? 'Select Date of Birth' : '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}',
-              style: TextStyle(color: selectedDate == null ? Colors.grey.shade500 : Colors.black),
+              style: TextStyle(color: selectedDate == null ? Colors.grey.shade500 : Colors.black, fontSize: 13),
             )),
           ]),
         ),
       ),
-      const SizedBox(height: 16),
+      const SizedBox(height: 12),
       _buildTextField(fatherController, "Father's Name", Icons.person, true),
-      const SizedBox(height: 16),
+      const SizedBox(height: 12),
       _buildTextField(motherController, "Mother's Name", Icons.person, true),
     ]);
   }
@@ -843,18 +1277,19 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
     return InkWell(
       onTap: () => setState(() => gender = text),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF4CAF50).withOpacity(0.1) : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(color: isSelected ? const Color(0xFF4CAF50) : Colors.grey.shade300),
         ),
         child: Center(child: Text(
           text, 
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            color: isSelected ? const Color(0xFF4CAF50) : Colors.grey.shade700
+            color: isSelected ? const Color(0xFF4CAF50) : Colors.grey.shade700,
+            fontSize: 12,
           )
         )),
       ),
@@ -863,12 +1298,12 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
 
   Widget _buildEducationStep() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Educational Details', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 8),
-      Text('Enter your current educational information', style: TextStyle(color: Colors.grey.shade600)),
-      const SizedBox(height: 32),
-      _buildTextField(schoolController, 'School Name', Icons.school, true),
+      const Text('Educational Details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      Text('Enter your current educational information', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
       const SizedBox(height: 20),
+      _buildTextField(schoolController, 'School Name', Icons.school, true),
+      const SizedBox(height: 15),
       _buildTextField(gradeController, 'Grade/Class', Icons.grade, true),
     ]);
   }
@@ -877,14 +1312,14 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
     final currentUser = _auth.currentUser;
     
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Contact Information', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 8),
-      Text('We\'ll use this information to contact you', style: TextStyle(color: Colors.grey.shade600)),
-      const SizedBox(height: 32),
+      const Text('Contact Information', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      Text('We\'ll use this information to contact you', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+      const SizedBox(height: 20),
       _buildTextField(phoneController, 'Phone Number', Icons.phone, true, TextInputType.phone),
-      const SizedBox(height: 20),
+      const SizedBox(height: 15),
       _buildTextField(whatsappController, 'WhatsApp (optional)', Icons.chat, false, TextInputType.phone),
-      const SizedBox(height: 20),
+      const SizedBox(height: 15),
       _buildTextField(
         emailController, 
         'Email Address', 
@@ -894,16 +1329,16 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
         currentUser?.email, 
         currentUser?.email != null
       ),
-      const SizedBox(height: 20),
-      const Text('Address *', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 8),
+      const SizedBox(height: 15),
+      const Text('Address *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
       TextFormField(
         controller: addressController,
-        maxLines: 4,
+        maxLines: 3, // ✅ REDUCED from 4
         decoration: InputDecoration(
           hintText: 'Enter your complete address', 
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          contentPadding: const EdgeInsets.all(16),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          contentPadding: const EdgeInsets.all(12),
         ),
         validator: (value) => value == null || value.isEmpty ? 'Required field' : null,
       ),
@@ -914,10 +1349,10 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
     final currentUser = _auth.currentUser;
     
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Payment Details', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 8),
-      Text('Complete your registration by making the payment', style: TextStyle(color: Colors.grey.shade600)),
-      const SizedBox(height: 32),
+      const Text('Payment Details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      Text('Complete your registration by making the payment', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+      const SizedBox(height: 20),
       _buildTextField(
         transactionIdController, 
         'Transaction ID', 
@@ -928,7 +1363,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
         false, 
         'Enter UTR/Transaction number'
       ),
-      const SizedBox(height: 20),
+      const SizedBox(height: 15),
       
       // Pay Now button
       if (!_paymentMade)
@@ -940,33 +1375,33 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
               : _showQRCodeDialog,
             style: ElevatedButton.styleFrom(
               backgroundColor: currentUser == null ? Colors.grey : Colors.green, 
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            icon: Icon(Icons.qr_code, color: Colors.white, size: 26),
+            icon: Icon(Icons.qr_code, color: Colors.white, size: 22),
             label: Text(
               currentUser == null ? 'Login Required' : 'Pay Now (₹200)', 
-              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
+              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)
             ),
           ),
         ),
       
-      if (!_paymentMade) const SizedBox(height: 20),
+      if (!_paymentMade) const SizedBox(height: 15),
       Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
           color: Colors.green.shade50, 
-          borderRadius: BorderRadius.circular(16), 
+          borderRadius: BorderRadius.circular(12), 
           border: Border.all(color: Colors.green.shade200)
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Payment Process:', style: TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 10),
+          const Text('Payment Process:', style: TextStyle(fontSize: 16, color: Colors.green, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: _paymentMade ? Colors.green.shade50 : Colors.yellow.shade50, 
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
               border: Border.all(color: _paymentMade ? Colors.green.shade300 : Colors.yellow.shade300),
             ),
             child: Column(
@@ -975,26 +1410,26 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                 if (currentUser == null)
                   const Text(
                     '⚠️ Please login to access payment options.',
-                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 13),
                   )
                 else if (_paymentMade)
                   const Text(
                     '✅ QR Code scanned successfully!',
-                    style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13),
                   )
                 else
                   const Text(
                     '📱 Click "Pay Now" to view QR code',
-                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   currentUser == null
                     ? 'You need to be logged in to make payment.'
                     : (_paymentMade 
                         ? 'Now enter the Transaction ID above and submit form.' 
                         : 'Scan QR code with any UPI app and pay ₹200.'),
-                  style: TextStyle(color: currentUser == null ? Colors.orange : (_paymentMade ? Colors.green : Colors.orange)),
+                  style: TextStyle(color: currentUser == null ? Colors.orange : (_paymentMade ? Colors.green : Colors.orange), fontSize: 12),
                 ),
               ],
             ),
@@ -1019,23 +1454,23 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
     }
     
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('$label${required ? ' *' : ''}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 8),
+      Text('$label${required ? ' *' : ''}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
       TextFormField(
         controller: controller,
         keyboardType: keyboardType,
         readOnly: readOnly,
         decoration: InputDecoration(
           hintText: hintText,
-          prefixIcon: Icon(icon, color: Colors.grey.shade600),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 20),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF4CAF50), width: 2),
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFF4CAF50), width: 1.5),
           ),
           filled: readOnly,
           fillColor: readOnly ? Colors.grey.shade50 : Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
         ),
         validator: required ? (value) => value == null || value.isEmpty ? 'Required field' : null : null,
       ),

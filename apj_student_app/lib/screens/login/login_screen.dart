@@ -65,58 +65,140 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       
+      await _handleUserLogin(email: email, userId: userId);
+      
+    } catch (e) {
+      print('⚠️ Auto login error: $e');
+    }
+  }
+
+  // ✅ NEW: Centralized login handling
+  Future<void> _handleUserLogin({String? email, String? userId}) async {
+    try {
       final firestore = FirebaseFirestore.instance;
-      
-      // Check by email first
-      QuerySnapshot emailQuery = await firestore
-          .collection('students')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-      
       DocumentSnapshot? userDoc;
       Map<String, dynamic>? userData;
       
-      if (emailQuery.docs.isNotEmpty) {
-        userDoc = emailQuery.docs.first;
-        userData = userDoc.data() as Map<String, dynamic>;
-        print('✅ Found user by email');
-      } 
-      // If not found by email, check by Firebase UID
-      else if (userId != null) {
-        QuerySnapshot uidQuery = await firestore
+      // ✅ FIXED: Check if this is a student email (sxxx@apj.org format)
+      if (email != null && email.endsWith('@apj.org') && email.startsWith('s')) {
+        print('🎓 Detected student email: $email');
+        
+        // ✅ METHOD 1: Search in students collection by studentEmail field
+        QuerySnapshot studentQuery = await firestore
             .collection('students')
-            .where('firebaseUid', isEqualTo: userId)
+            .where('studentEmail', isEqualTo: email)
             .limit(1)
             .get();
         
-        if (uidQuery.docs.isNotEmpty) {
-          userDoc = uidQuery.docs.first;
+        if (studentQuery.docs.isNotEmpty) {
+          userDoc = studentQuery.docs.first;
           userData = userDoc.data() as Map<String, dynamic>;
-          print('✅ Found user by Firebase UID');
+          print('✅ Found student by studentEmail field');
+        }
+        // ✅ METHOD 2: Search by email field
+        else {
+          QuerySnapshot emailQuery = await firestore
+              .collection('students')
+              .where('email', isEqualTo: email)
+              .limit(1)
+              .get();
+          
+          if (emailQuery.docs.isNotEmpty) {
+            userDoc = emailQuery.docs.first;
+            userData = userDoc.data() as Map<String, dynamic>;
+            print('✅ Found student by email field');
+          }
+        }
+      }
+      // Regular user (parent/guardian)
+      else {
+        // Check by email first
+        if (email != null) {
+          QuerySnapshot emailQuery = await firestore
+              .collection('students')
+              .where('email', isEqualTo: email)
+              .limit(1)
+              .get();
+          
+          if (emailQuery.docs.isNotEmpty) {
+            userDoc = emailQuery.docs.first;
+            userData = userDoc.data() as Map<String, dynamic>;
+            print('✅ Found user by email');
+          }
+        }
+        // If not found by email, check by Firebase UID
+        if (userDoc == null && userId != null) {
+          QuerySnapshot uidQuery = await firestore
+              .collection('students')
+              .where('studentAuthUid', isEqualTo: userId)
+              .limit(1)
+              .get();
+          
+          if (uidQuery.docs.isEmpty) {
+            uidQuery = await firestore
+                .collection('students')
+                .where('firebaseUid', isEqualTo: userId)
+                .limit(1)
+                .get();
+          }
+          
+          if (uidQuery.docs.isNotEmpty) {
+            userDoc = uidQuery.docs.first;
+            userData = userDoc.data() as Map<String, dynamic>;
+            print('✅ Found user by UID');
+          }
         }
       }
       
       if (userData != null) {
         final regNumber = userData['registrationNumber']?.toString();
         final isRegistered = userData['isRegistered'] ?? false;
+        final accountType = userData['accountType'] ?? 'parent';
         
         print('🔢 Registration Number: $regNumber');
         print('📝 isRegistered: $isRegistered');
+        print('👤 Account Type: $accountType');
         
-        if (regNumber != null && regNumber.isNotEmpty && isRegistered) {
-          print('✅ User fully registered, redirecting to dashboard');
+        // ✅ STUDENT ACCOUNT: Always considered registered
+        if (email != null && email.endsWith('@apj.org') && email.startsWith('s')) {
+          print('✅ Student account detected - direct to dashboard');
           
           // Save all user data to SharedPreferences
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('userId', userDoc!.id);
+          await prefs.setString('registrationNumber', regNumber ?? '');
+          await prefs.setString('fullName', userData['name']?.toString() ?? '');
+          await prefs.setString('phone', userData['phone']?.toString() ?? '');
+          await prefs.setString('course', userData['grade']?.toString() ?? '');
+          await prefs.setString('userPhoto', userData['photoUrl']?.toString() ?? '');
+          await prefs.setString('userEmail', email);
+          await prefs.setBool('isRegistered', true);
+          await prefs.setString('firebaseUid', userData['studentAuthUid']?.toString() ?? '');
+          await prefs.setString('accountType', 'student');
+          await prefs.setBool('isLoggedIn', true);
+          
+          await Future.delayed(const Duration(milliseconds: 300));
+          
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, '/dashboard');
+          }
+        }
+        // PARENT ACCOUNT: Check if registered
+        else if (regNumber != null && regNumber.isNotEmpty && isRegistered) {
+          print('✅ User fully registered, redirecting to dashboard');
+          
+          final prefs = await SharedPreferences.getInstance();
           await prefs.setString('userId', userDoc!.id);
           await prefs.setString('registrationNumber', regNumber);
           await prefs.setString('fullName', userData['fullName']?.toString() ?? '');
           await prefs.setString('phone', userData['phone']?.toString() ?? '');
           await prefs.setString('course', userData['course']?.toString() ?? '');
           await prefs.setString('userPhoto', userData['profilePhoto']?.toString() ?? '');
-          await prefs.setString('userEmail', userData['email']?.toString() ?? email);
+          await prefs.setString('userEmail', userData['email']?.toString() ?? email ?? '');
           await prefs.setBool('isRegistered', true);
           await prefs.setString('firebaseUid', userData['firebaseUid']?.toString() ?? '');
+          await prefs.setString('accountType', 'parent');
+          await prefs.setBool('isLoggedIn', true);
           
           await Future.delayed(const Duration(milliseconds: 300));
           
@@ -125,14 +207,16 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         } else {
           print('⚠️ User not fully registered, clearing login');
+          final prefs = await SharedPreferences.getInstance();
           await prefs.clear();
         }
       } else {
         print('❌ User not found in Firestore, clearing login');
+        final prefs = await SharedPreferences.getInstance();
         await prefs.clear();
       }
     } catch (e) {
-      print('⚠️ Auto login error: $e');
+      print('⚠️ Error in handleUserLogin: $e');
     }
   }
 
@@ -248,8 +332,6 @@ class _LoginScreenState extends State<LoginScreen> {
       
       final UserCredential userCredential = await _auth.signInWithCredential(credential);
       final User? user = userCredential.user;
-
-      
       
       if (user != null) {
         print('✅ Google Sign In Successful!');
@@ -303,7 +385,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ✅ FIXED: Email Sign In
+  // ✅ FIXED: Email Sign In (WITH STUDENT SUPPORT)
   void _signInWithEmail() {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -327,10 +409,123 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
     
-    _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    ).then((userCredential) async {
+    // ✅ FIXED: Special handling for student accounts
+    if (email.endsWith('@apj.org') && email.startsWith('s')) {
+      print('🎓 Student email login attempt: $email');
+      _handleStudentEmailLogin(email, password);
+    } else {
+      _handleRegularEmailLogin(email, password);
+    }
+  }
+
+  // ✅ NEW: Handle student email login
+  Future<void> _handleStudentEmailLogin(String email, String password) async {
+    try {
+      print('🎯 Attempting student login...');
+      
+      // Step 1: Sign in with Firebase Auth
+      final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      
+      final user = userCredential.user;
+      if (user == null) {
+        throw FirebaseAuthException(code: 'user-not-found', message: 'Student not found');
+      }
+      
+      print('✅ Firebase Auth login successful for student');
+      
+      // Step 2: Check in Firestore
+      final firestore = FirebaseFirestore.instance;
+      
+      // Try to find student by studentEmail field
+      QuerySnapshot studentQuery = await firestore
+          .collection('students')
+          .where('studentEmail', isEqualTo: email)
+          .limit(1)
+          .get();
+      
+      DocumentSnapshot? studentDoc;
+      Map<String, dynamic>? studentData;
+      
+      if (studentQuery.docs.isNotEmpty) {
+        studentDoc = studentQuery.docs.first;
+        studentData = studentDoc.data() as Map<String, dynamic>;
+        print('✅ Found student in Firestore by studentEmail');
+      } else {
+        // Try by email field
+        QuerySnapshot emailQuery = await firestore
+            .collection('students')
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+        
+        if (emailQuery.docs.isNotEmpty) {
+          studentDoc = emailQuery.docs.first;
+          studentData = studentDoc.data() as Map<String, dynamic>;
+          print('✅ Found student in Firestore by email field');
+        }
+      }
+      
+      if (studentData == null) {
+        print('❌ Student not found in Firestore');
+        await _auth.signOut();
+        _showErrorDialog('Student account not found. Please contact administrator.');
+        setState(() { _isLoading = false; });
+        return;
+      }
+      
+      // Step 3: Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isLoggedIn', true);
+      await prefs.setString('userEmail', email);
+      await prefs.setString('userId', studentDoc!.id);
+      await prefs.setString('loginMethod', 'email');
+      await prefs.setString('accountType', 'student');
+      await prefs.setString('registrationNumber', studentData['registrationNumber']?.toString() ?? '');
+      await prefs.setString('fullName', studentData['name']?.toString() ?? '');
+      await prefs.setString('phone', studentData['phone']?.toString() ?? '');
+      await prefs.setString('course', studentData['grade']?.toString() ?? '');
+      await prefs.setString('userPhoto', studentData['photoUrl']?.toString() ?? '');
+      await prefs.setString('firebaseUid', studentData['studentAuthUid']?.toString() ?? '');
+      await prefs.setBool('isRegistered', true);
+      
+      print('✅ Student login successful!');
+      
+      // Step 4: Navigate to dashboard
+      _showSnackBar('Welcome back!');
+      
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          setState(() { _isLoading = false; });
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        }
+      });
+      
+    } catch (error) {
+      print('❌ Student login error: $error');
+      setState(() { _isLoading = false; });
+      
+      if (error.toString().contains('invalid-credential') || 
+          error.toString().contains('wrong-password')) {
+        _showErrorDialog('Invalid email or password');
+      } else if (error.toString().contains('user-not-found')) {
+        _showErrorDialog('Student account not found. Please check your email.');
+      } else {
+        _showErrorDialog('Login failed. Please try again.');
+      }
+    }
+  }
+
+  // ✅ NEW: Handle regular email login (parents/guardians)
+  Future<void> _handleRegularEmailLogin(String email, String password) async {
+    try {
+      final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      
       print('✅ Email Login Successful!');
       final user = userCredential.user;
       
@@ -340,6 +535,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('userEmail', email);
         await prefs.setString('userId', user.uid);
         await prefs.setString('loginMethod', 'email');
+        await prefs.setString('accountType', 'parent');
         
         final defaultPhoto = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
         await prefs.setString('userPhoto', defaultPhoto);
@@ -351,14 +547,11 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
       
-    }).catchError((error) {
+    } catch (error) {
       print('❌ Email Login Error: $error');
       _showErrorDialog('Login failed. Please check your credentials.');
-    }).whenComplete(() {
-      setState(() {
-        _isLoading = false;
-      });
-    });
+      setState(() { _isLoading = false; });
+    }
   }
 
   // ✅ FIXED: Save or update user in Firestore
@@ -513,6 +706,7 @@ class _LoginScreenState extends State<LoginScreen> {
     await prefs.setString('userEmail', studentData['email']?.toString() ?? '');
     await prefs.setString('firebaseUid', studentData['firebaseUid']?.toString() ?? '');
     await prefs.setBool('isRegistered', true);
+    await prefs.setString('accountType', 'parent');
     
     print('💾 User data saved to SharedPreferences');
   }
@@ -540,6 +734,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('registerPhoto', photoUrl);
       await prefs.setBool('isNewUser', true);
       await prefs.setBool('isRegistered', false);
+      await prefs.setString('accountType', 'parent');
     });
     
     _showSnackBar('Please complete registration');
@@ -906,7 +1101,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                 ),
-              ], // ✅ Column children closed
+              ],
             ),
           ),
         ),
@@ -914,4 +1109,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
