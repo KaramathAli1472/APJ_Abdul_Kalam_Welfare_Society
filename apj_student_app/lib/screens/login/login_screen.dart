@@ -31,13 +31,81 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isGoogleLoading = false;
   bool _isWakeLockEnabled = false;
+  bool _rememberMe = false; // ✅ NEW: Remember Me checkbox
 
   @override
   void initState() {
     super.initState();
     print('🚀 Login Screen Loaded');
     _initWakeLock();
+    _loadSavedCredentials(); // ✅ NEW: Load saved credentials
     _checkAutoLogin();
+  }
+
+  // ✅ NEW: Load saved credentials from SharedPreferences
+  Future<void> _loadSavedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString('savedEmail');
+      final savedPassword = prefs.getString('savedPassword');
+      final rememberMe = prefs.getBool('rememberMe') ?? false;
+      
+      if (savedEmail != null && savedEmail.isNotEmpty) {
+        _emailController.text = savedEmail;
+      }
+      
+      if (savedPassword != null && savedPassword.isNotEmpty) {
+        _passwordController.text = savedPassword;
+      }
+      
+      setState(() {
+        _rememberMe = rememberMe;
+      });
+      
+      print('📝 Loaded saved credentials - Remember Me: $_rememberMe');
+      
+    } catch (e) {
+      print('⚠️ Error loading saved credentials: $e');
+    }
+  }
+
+  // ✅ NEW: Save credentials to SharedPreferences
+  Future<void> _saveCredentials(String email, String password) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      if (_rememberMe) {
+        // Save email and password
+        await prefs.setString('savedEmail', email);
+        await prefs.setString('savedPassword', password);
+        await prefs.setBool('rememberMe', true);
+        print('💾 Credentials saved for Remember Me');
+      } else {
+        // Clear saved credentials
+        await prefs.remove('savedEmail');
+        await prefs.remove('savedPassword');
+        await prefs.setBool('rememberMe', false);
+        print('🗑️ Credentials cleared');
+      }
+    } catch (e) {
+      print('⚠️ Error saving credentials: $e');
+    }
+  }
+
+  // ✅ NEW: Clear saved credentials
+  Future<void> _clearSavedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('savedEmail');
+      await prefs.remove('savedPassword');
+      await prefs.setBool('rememberMe', false);
+      setState(() {
+        _rememberMe = false;
+      });
+      print('🗑️ Cleared saved credentials');
+    } catch (e) {
+      print('⚠️ Error clearing credentials: $e');
+    }
   }
 
   // ✅ FIXED: Auto login check
@@ -385,7 +453,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ✅ FIXED: Email Sign In (WITH STUDENT SUPPORT)
+  // ✅ FIXED: Email Sign In (WITH STUDENT SUPPORT & REMEMBER ME)
   void _signInWithEmail() {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -408,6 +476,9 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _isLoading = true;
     });
+    
+    // ✅ NEW: Save credentials if Remember Me is checked
+    _saveCredentials(email, password);
     
     // ✅ FIXED: Special handling for student accounts
     if (email.endsWith('@apj.org') && email.startsWith('s')) {
@@ -965,17 +1036,49 @@ class _LoginScreenState extends State<LoginScreen> {
                   obscureText: !_isPasswordVisible,
                 ),
                 
-                const SizedBox(height: 3),
+                const SizedBox(height: 10),
                 
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: _forgetPassword,
-                    child: const Text(
-                      'Forgot Password?',
-                      style: TextStyle(color: Colors.blue),
+                // ✅ NEW: Remember Me & Forgot Password Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Remember Me Checkbox
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: _rememberMe,
+                          onChanged: (value) {
+                            setState(() {
+                              _rememberMe = value!;
+                            });
+                            // Save preference immediately
+                            SharedPreferences.getInstance().then((prefs) {
+                              prefs.setBool('rememberMe', _rememberMe);
+                            });
+                          },
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const Text(
+                          'Remember Me',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                    
+                    // Forgot Password
+                    TextButton(
+                      onPressed: _forgetPassword,
+                      child: const Text(
+                        'Forgot Password?',
+                        style: TextStyle(color: Colors.blue),
+                      ),
+                    ),
+                  ],
                 ),
                 
                 const SizedBox(height: 05),
@@ -1066,6 +1169,21 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                   ),
                 ),
+                
+                const SizedBox(height: 10),
+                
+                // Clear Saved Credentials Button (Optional - for testing)
+                if (_emailController.text.isNotEmpty || _passwordController.text.isNotEmpty)
+                  TextButton(
+                    onPressed: _clearSavedCredentials,
+                    child: const Text(
+                      'Clear Saved Credentials',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
                 
                 const SizedBox(height: 10),
                 

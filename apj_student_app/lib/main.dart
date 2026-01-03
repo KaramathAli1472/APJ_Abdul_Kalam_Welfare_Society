@@ -42,19 +42,19 @@ class StudentApp extends StatelessWidget {
       initialRoute: '/login',
       
       routes: {
-        // 🔑 Login Screen
-        '/login': (context) => const LoginScreen(),
+        // 🔑 Login Screen - WITHOUT const (StatefulWidget)
+        '/login': (context) => LoginScreen(),
         
         // 📝 Login/Google Sign-in ke baad Registration Form
-        '/register': (context) => const RegistrationFormScreen(),
+        '/register': (context) => RegistrationFormScreen(),
         
-        // 🏠 Registration submit ke baad Dashboard
-        '/dashboard': (context) => const DashboardScreen(),
+        // 🏠 Registration submit ke baad Dashboard - WITHOUT const (StatefulWidget)
+        '/dashboard': (context) => DashboardScreen(),
         
-        // 📚 Other screens
-        '/exam': (context) => const ExamScreen(),
-        '/result': (context) => const ResultScreen(),
-        '/idcard': (context) => const IdCardScreen(),
+        // 📚 Other screens - WITHOUT const
+        '/exam': (context) => ExamScreen(),
+        '/result': (context) => ResultScreen(),
+        '/idcard': (context) => IdCardScreen(),
       },
     );
   }
