@@ -20,7 +20,6 @@ class _LoginScreenState extends State<LoginScreen> {
     scopes: ['email', 'profile'],
   );
   
-  // ✅ Cloudinary Configuration
   static const String _cloudName = 'drxe5e2nk';
   static const String _uploadPreset = 'students_photos';
   static const String _assetFolder = 'students';
@@ -41,14 +40,13 @@ class _LoginScreenState extends State<LoginScreen> {
     _checkAutoLogin();
   }
 
-  // ✅ FIXED: Auto login check function
+  // ✅ FIXED: Auto login check
   Future<void> _checkAutoLogin() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
       
-      print('🔍 Auto Login Check:');
-      print('📱 isLoggedIn: $isLoggedIn');
+      print('🔍 Auto Login Check: isLoggedIn = $isLoggedIn');
       
       if (!isLoggedIn) {
         print('❌ No auto login - User not logged in');
@@ -57,57 +55,84 @@ class _LoginScreenState extends State<LoginScreen> {
       
       final email = prefs.getString('userEmail');
       final userId = prefs.getString('userId');
-      final registrationNumber = prefs.getString('registrationNumber');
       
-      print('📧 Email: $email');
-      print('🆔 User ID: $userId');
-      print('🔢 Reg Number: $registrationNumber');
+      print('📧 Email from prefs: $email');
+      print('🆔 User ID from prefs: $userId');
       
       if (email == null || email.isEmpty) {
-        print('❌ No email found in SharedPreferences');
+        print('❌ No email found');
+        await prefs.setBool('isLoggedIn', false);
         return;
       }
       
-      // Check if user is registered in Firestore
-      final studentDoc = await FirebaseFirestore.instance
+      final firestore = FirebaseFirestore.instance;
+      
+      // Check by email first
+      QuerySnapshot emailQuery = await firestore
           .collection('students')
           .where('email', isEqualTo: email)
           .limit(1)
           .get();
       
-      if (studentDoc.docs.isNotEmpty) {
-        final userData = studentDoc.docs.first.data();
+      DocumentSnapshot? userDoc;
+      Map<String, dynamic>? userData;
+      
+      if (emailQuery.docs.isNotEmpty) {
+        userDoc = emailQuery.docs.first;
+        userData = userDoc.data() as Map<String, dynamic>;
+        print('✅ Found user by email');
+      } 
+      // If not found by email, check by Firebase UID
+      else if (userId != null) {
+        QuerySnapshot uidQuery = await firestore
+            .collection('students')
+            .where('firebaseUid', isEqualTo: userId)
+            .limit(1)
+            .get();
+        
+        if (uidQuery.docs.isNotEmpty) {
+          userDoc = uidQuery.docs.first;
+          userData = userDoc.data() as Map<String, dynamic>;
+          print('✅ Found user by Firebase UID');
+        }
+      }
+      
+      if (userData != null) {
         final regNumber = userData['registrationNumber']?.toString();
+        final isRegistered = userData['isRegistered'] ?? false;
         
-        print('📋 Firestore Registration Number: $regNumber');
+        print('🔢 Registration Number: $regNumber');
+        print('📝 isRegistered: $isRegistered');
         
-        if (regNumber != null && regNumber.isNotEmpty) {
-          print('✅ User already registered, redirecting to dashboard...');
+        if (regNumber != null && regNumber.isNotEmpty && isRegistered) {
+          print('✅ User fully registered, redirecting to dashboard');
           
-          // Update SharedPreferences with latest data
-          await prefs.setString('userId', studentDoc.docs.first.id);
+          // Save all user data to SharedPreferences
+          await prefs.setString('userId', userDoc!.id);
           await prefs.setString('registrationNumber', regNumber);
-          await prefs.setString('fullName', userData['fullName'] ?? '');
-          await prefs.setString('phone', userData['phone'] ?? '');
-          await prefs.setString('course', userData['course'] ?? '');
-          await prefs.setString('userPhoto', userData['profilePhoto'] ?? '');
+          await prefs.setString('fullName', userData['fullName']?.toString() ?? '');
+          await prefs.setString('phone', userData['phone']?.toString() ?? '');
+          await prefs.setString('course', userData['course']?.toString() ?? '');
+          await prefs.setString('userPhoto', userData['profilePhoto']?.toString() ?? '');
+          await prefs.setString('userEmail', userData['email']?.toString() ?? email);
+          await prefs.setBool('isRegistered', true);
+          await prefs.setString('firebaseUid', userData['firebaseUid']?.toString() ?? '');
           
-          // Give time for UI to build
-          await Future.delayed(Duration(milliseconds: 100));
+          await Future.delayed(const Duration(milliseconds: 300));
           
           if (mounted) {
             Navigator.pushReplacementNamed(context, '/dashboard');
           }
         } else {
-          print('❌ User exists but not registered');
-          await prefs.setBool('isLoggedIn', false); // Reset login status
+          print('⚠️ User not fully registered, clearing login');
+          await prefs.clear();
         }
       } else {
-        print('❌ User not found in Firestore');
-        await prefs.setBool('isLoggedIn', false); // Reset login status
+        print('❌ User not found in Firestore, clearing login');
+        await prefs.clear();
       }
     } catch (e) {
-      print('⚠️ Auto login check error: $e');
+      print('⚠️ Auto login error: $e');
     }
   }
 
@@ -135,18 +160,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ✅ Function to upload image to Cloudinary
   Future<String?> _uploadToCloudinary(String imageUrl, {String? fileName}) async {
     try {
       print('☁️ Uploading image to Cloudinary...');
       
-      // Check if it's already a Cloudinary URL
       if (imageUrl.contains('cloudinary.com')) {
         print('✅ Image is already from Cloudinary');
         return imageUrl;
       }
       
-      // Check if it's a default image
       if (imageUrl.contains('blank-profile-picture')) {
         print('📸 Using default profile picture');
         return imageUrl;
@@ -209,7 +231,6 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       print('🔄 Starting Google Sign In Process...');
       
-      // Trigger Google Sign In
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       
       if (googleUser == null) {
@@ -227,6 +248,8 @@ class _LoginScreenState extends State<LoginScreen> {
       
       final UserCredential userCredential = await _auth.signInWithCredential(credential);
       final User? user = userCredential.user;
+
+      
       
       if (user != null) {
         print('✅ Google Sign In Successful!');
@@ -248,7 +271,7 @@ class _LoginScreenState extends State<LoginScreen> {
           cloudinaryPhotoUrl = cloudinaryUrl ?? profilePhotoUrl;
         }
         
-        // ✅ IMPORTANT: Save login status FIRST
+        // ✅ Save login status
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
         await prefs.setString('userEmail', user.email ?? '');
@@ -256,10 +279,21 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('userPhoto', cloudinaryPhotoUrl);
         await prefs.setString('userId', user.uid);
         await prefs.setString('loginMethod', 'google');
-        await prefs.setString('originalPhotoUrl', profilePhotoUrl ?? '');
+        
+        // ✅ IMPORTANT: Save user info in Firestore (Temporary until registration)
+        await _saveOrUpdateUserInFirestore(
+          email: user.email!,
+          uid: user.uid,
+          name: user.displayName ?? '',
+          photoUrl: cloudinaryPhotoUrl,
+        );
         
         // Now check registration status
-        await _checkRegistrationAndNavigate(user.email!, user.uid, cloudinaryPhotoUrl);
+        await _checkRegistrationAndNavigate(
+          email: user.email!,
+          userId: user.uid,
+          photoUrl: cloudinaryPhotoUrl,
+        );
       }
       
     } catch (error) {
@@ -301,7 +335,6 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = userCredential.user;
       
       if (user != null) {
-        // ✅ Save login status FIRST
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
         await prefs.setString('userEmail', email);
@@ -311,8 +344,11 @@ class _LoginScreenState extends State<LoginScreen> {
         final defaultPhoto = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
         await prefs.setString('userPhoto', defaultPhoto);
         
-        // Now check registration status
-        await _checkRegistrationAndNavigate(email, user.uid, defaultPhoto);
+        await _checkRegistrationAndNavigate(
+          email: email,
+          userId: user.uid,
+          photoUrl: defaultPhoto,
+        );
       }
       
     }).catchError((error) {
@@ -325,89 +361,149 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  // ✅ FIXED: Main function to check registration status
-  Future<void> _checkRegistrationAndNavigate(String email, String userId, String photoUrl) async {
+  // ✅ FIXED: Save or update user in Firestore
+  Future<void> _saveOrUpdateUserInFirestore({
+    required String email,
+    required String uid,
+    required String name,
+    required String photoUrl,
+  }) async {
     try {
-      print('🔍 Checking registration status for: $email');
+      final firestore = FirebaseFirestore.instance;
       
-      // Method 1: Check by email
-      final emailQuery = await FirebaseFirestore.instance
+      // Check if user already exists by email
+      QuerySnapshot emailQuery = await firestore
           .collection('students')
           .where('email', isEqualTo: email)
           .limit(1)
           .get();
       
-      if (emailQuery.docs.isNotEmpty) {
-        final studentDoc = emailQuery.docs.first;
-        final studentData = studentDoc.data();
-        final regNumber = studentData['registrationNumber']?.toString();
-        
-        print('📋 Found user by email');
-        print('🔢 Registration Number: $regNumber');
-        
-        if (regNumber != null && regNumber.isNotEmpty) {
-          // ✅ USER IS REGISTERED - Go to dashboard
-          await _saveUserToPrefs(studentData, studentDoc.id, photoUrl);
-          _goToDashboard(studentData['fullName'] ?? '');
-          return;
-        }
-      }
+      // Check if user already exists by Firebase UID
+      QuerySnapshot uidQuery = await firestore
+          .collection('students')
+          .where('firebaseUid', isEqualTo: uid)
+          .limit(1)
+          .get();
       
-      // Method 2: Check by Firebase UID
-      final uidQuery = await FirebaseFirestore.instance
+      Map<String, dynamic> userData = {
+        'email': email,
+        'firebaseUid': uid,
+        'fullName': name,
+        'profilePhoto': photoUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'loginMethod': 'google',
+      };
+      
+      if (emailQuery.docs.isNotEmpty) {
+        // Update existing user
+        await emailQuery.docs.first.reference.update(userData);
+        print('✅ Updated existing user in Firestore');
+      } else if (uidQuery.docs.isNotEmpty) {
+        // Update existing user by UID
+        await uidQuery.docs.first.reference.update(userData);
+        print('✅ Updated existing user by UID in Firestore');
+      } else {
+        // Create new user
+        userData['createdAt'] = FieldValue.serverTimestamp();
+        userData['isRegistered'] = false;
+        userData['status'] = 'pending';
+        
+        await firestore.collection('students').add(userData);
+        print('✅ Created new user in Firestore');
+      }
+    } catch (e) {
+      print('⚠️ Error saving user to Firestore: $e');
+    }
+  }
+
+  // ✅ FIXED: Check registration status
+  Future<void> _checkRegistrationAndNavigate({
+    required String email,
+    required String userId,
+    required String photoUrl,
+  }) async {
+    try {
+      print('🔍 Checking registration status for: $email');
+      
+      final firestore = FirebaseFirestore.instance;
+      
+      // Check by email
+      QuerySnapshot emailQuery = await firestore
+          .collection('students')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      
+      // Check by Firebase UID
+      QuerySnapshot uidQuery = await firestore
           .collection('students')
           .where('firebaseUid', isEqualTo: userId)
           .limit(1)
           .get();
       
-      if (uidQuery.docs.isNotEmpty) {
-        final studentDoc = uidQuery.docs.first;
-        final studentData = studentDoc.data();
-        final regNumber = studentData['registrationNumber']?.toString();
+      print('📊 Email query results: ${emailQuery.docs.length}');
+      print('📊 UID query results: ${uidQuery.docs.length}');
+      
+      DocumentSnapshot? userDoc;
+      Map<String, dynamic>? userData;
+      
+      if (emailQuery.docs.isNotEmpty) {
+        userDoc = emailQuery.docs.first;
+        userData = userDoc.data() as Map<String, dynamic>;
+        print('✅ Found user by email');
+      } else if (uidQuery.docs.isNotEmpty) {
+        userDoc = uidQuery.docs.first;
+        userData = userDoc.data() as Map<String, dynamic>;
+        print('✅ Found user by UID');
+      }
+      
+      if (userData != null) {
+        final regNumber = userData['registrationNumber']?.toString();
+        final isRegistered = userData['isRegistered'] ?? false;
         
-        print('📋 Found user by UID');
         print('🔢 Registration Number: $regNumber');
+        print('📝 isRegistered: $isRegistered');
         
-        if (regNumber != null && regNumber.isNotEmpty) {
+        if (regNumber != null && regNumber.isNotEmpty && isRegistered) {
           // ✅ USER IS REGISTERED - Go to dashboard
-          await _saveUserToPrefs(studentData, studentDoc.id, photoUrl);
-          _goToDashboard(studentData['fullName'] ?? '');
-          return;
+          print('✅ User already registered, going to dashboard');
+          await _saveUserToPrefs(userData, userDoc!.id, photoUrl);
+          _goToDashboard(userData['fullName'] ?? '');
+        } else {
+          // User exists but not registered
+          print('⚠️ User exists but not registered, going to registration');
+          
+          // Update profile photo if needed
+          if (userData['profilePhoto'] == null || userData['profilePhoto'].isEmpty) {
+            await userDoc!.reference.update({
+              'profilePhoto': photoUrl,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          }
+          
+          _goToRegistration(email, photoUrl, userId);
         }
-      }
-      
-      // Method 3: Check if user exists without registration number
-      if (emailQuery.docs.isNotEmpty || uidQuery.docs.isNotEmpty) {
-        print('⚠️ User exists but registration not complete');
-        // User exists in Firestore but no registration number
-        // Update photo if needed
-        final docRef = emailQuery.docs.isNotEmpty 
-            ? emailQuery.docs.first.reference 
-            : uidQuery.docs.first.reference;
-        
-        await docRef.update({
-          'profilePhoto': photoUrl,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        
+      } else {
+        // User not found - new user
+        print('👤 New user detected, going to registration');
         _goToRegistration(email, photoUrl, userId);
-        return;
       }
-      
-      // ✅ USER NOT FOUND - New user
-      print('👤 New user detected');
-      _goToRegistration(email, photoUrl, userId);
       
     } catch (e) {
       print('⚠️ Error checking registration: $e');
-      // On error, go to registration
       _goToRegistration(email, photoUrl, userId);
+    } finally {
+      setState(() {
+        _isGoogleLoading = false;
+        _isLoading = false;
+      });
     }
   }
 
-  // ✅ Helper: Save user data to SharedPreferences
+  // ✅ Save user data to SharedPreferences
   Future<void> _saveUserToPrefs(Map<String, dynamic> studentData, String docId, String photoUrl) async {
     final prefs = await SharedPreferences.getInstance();
+    
     await prefs.setString('userId', docId);
     await prefs.setString('registrationNumber', studentData['registrationNumber']?.toString() ?? '');
     await prefs.setString('fullName', studentData['fullName']?.toString() ?? '');
@@ -415,30 +511,29 @@ class _LoginScreenState extends State<LoginScreen> {
     await prefs.setString('course', studentData['course']?.toString() ?? '');
     await prefs.setString('userPhoto', photoUrl);
     await prefs.setString('userEmail', studentData['email']?.toString() ?? '');
+    await prefs.setString('firebaseUid', studentData['firebaseUid']?.toString() ?? '');
     await prefs.setBool('isRegistered', true);
     
     print('💾 User data saved to SharedPreferences');
-    print('📋 Registration Number: ${studentData['registrationNumber']}');
   }
 
-  // ✅ Helper: Go to dashboard
+  // ✅ Go to dashboard
   void _goToDashboard(String userName) {
     print('✅ Going to dashboard...');
     
     _showSnackBar('Welcome back${userName.isNotEmpty ? ', $userName' : ''}!');
     
-    Future.delayed(Duration(milliseconds: 800), () {
+    Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/dashboard');
       }
     });
   }
 
-  // ✅ Helper: Go to registration
+  // ✅ Go to registration
   void _goToRegistration(String email, String photoUrl, String userId) {
     print('📝 Going to registration form...');
     
-    // Save data for registration screen
     SharedPreferences.getInstance().then((prefs) async {
       await prefs.setString('registerEmail', email);
       await prefs.setString('firebaseUid', userId);
@@ -449,7 +544,7 @@ class _LoginScreenState extends State<LoginScreen> {
     
     _showSnackBar('Please complete registration');
     
-    Future.delayed(Duration(milliseconds: 800), () {
+    Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/register');
       }
@@ -465,7 +560,7 @@ class _LoginScreenState extends State<LoginScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text('Enter your email to reset password:'),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
             TextField(
               decoration: InputDecoration(
                 hintText: 'Enter your email',
@@ -600,7 +695,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 
-                const SizedBox(height: 10),
+                const SizedBox(height: 05),
                 const Column(
                   children: [
                     Text(
@@ -624,7 +719,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
                 
-                const SizedBox(height: 30),
+                const SizedBox(height: 03),
                 
                 // Email Field
                 TextField(
@@ -643,7 +738,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 
-                const SizedBox(height: 15),
+                const SizedBox(height: 05),
                 
                 // Password Field
                 TextField(
@@ -675,7 +770,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   obscureText: !_isPasswordVisible,
                 ),
                 
-                const SizedBox(height: 5),
+                const SizedBox(height: 3),
                 
                 Align(
                   alignment: Alignment.centerRight,
@@ -688,7 +783,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 
-                const SizedBox(height: 10),
+                const SizedBox(height: 05),
                 
                 // Login Button
                 SizedBox(
@@ -715,7 +810,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
                 
                 // OR Divider
                 Row(
@@ -777,7 +872,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 
-                const SizedBox(height: 30),
+                const SizedBox(height: 10),
                 
                 // WakeLock
                 Container(
@@ -791,57 +886,27 @@ class _LoginScreenState extends State<LoginScreen> {
                       Switch(
                         value: _isWakeLockEnabled,
                         onChanged: _toggleWakeLock,
-                        activeColor: Colors.blue,
                       ),
                       const SizedBox(width: 10),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _isWakeLockEnabled ? 'Screen Always ON' : 'Screen Normal',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: _isWakeLockEnabled ? Colors.blue : Colors.grey[700],
-                            ),
+                            _isWakeLockEnabled
+                                ? 'Screen Always ON'
+                                : 'Screen Normal',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          Text(
-                            _isWakeLockEnabled 
-                                ? 'Screen will not sleep'
-                                : 'Screen can sleep normally',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          const Text(
+                            'Prevent screen sleep',
+                            style: TextStyle(fontSize: 12),
                           ),
                         ],
                       ),
                     ],
                   ),
                 ),
-                
-                const SizedBox(height: 20),
-                
-                // Sign up link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text("Don't have an account? "),
-                    TextButton(
-                      onPressed: () {
-                        // Clear any existing login data
-                        SharedPreferences.getInstance().then((prefs) {
-                          prefs.setBool('isRegistered', false);
-                        });
-                        Navigator.pushReplacementNamed(context, '/register');
-                      },
-                      child: const Text(
-                        'Sign Up',
-                        style: TextStyle(
-                          color: Colors.blue,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ], // ✅ Column children closed
             ),
           ),
         ),
@@ -849,3 +914,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+

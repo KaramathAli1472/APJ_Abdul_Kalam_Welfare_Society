@@ -185,31 +185,6 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                 const SizedBox(height: 20),
                 
                 Container(
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.currency_rupee, color: Colors.blue),
-                      SizedBox(width: 8),
-                      Text(
-                        'Registration Fee: ₹200',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                
-                Container(
                   padding: const EdgeInsets.all(25),
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -236,7 +211,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(10),
                           child: Image.asset(
-                            'assets/qr_code.png',
+                            'assets/images/qr_code.png',
                             fit: BoxFit.contain,
                             errorBuilder: (context, error, stackTrace) {
                               return Container(
@@ -262,106 +237,75 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                       const SizedBox(height: 20),
                       
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(15),
                         decoration: BoxDecoration(
-                          color: Colors.purple.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.purple.shade200),
+                          color: Colors.yellow.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.yellow.shade300),
                         ),
-                        child: Column(
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'UPI ID (For Manual Payment)',
+                            Text(
+                              '📋 Payment Instructions:',
                               style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.purple,
                                 fontWeight: FontWeight.bold,
+                                color: Colors.orange,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            SelectableText(
-                              'apjwelfare@upi',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.purple,
-                              ),
-                            ),
+                            SizedBox(height: 8),
+                            Text('1. Open Google Pay, PhonePe or any UPI app'),
+                            Text('2. Tap on "Scan QR Code"'),
+                            Text('3. Point camera at the QR code above'),
+                            Text('4. Pay exact amount: ₹200'),
+                            Text('5. Note down Transaction ID after payment'),
                           ],
                         ),
                       ),
+                      const SizedBox(height: 20),
+                      
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                setState(() => _paymentMade = true);
+                                _showSuccess('Please enter Transaction ID after payment.');
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              child: const Text(
+                                'I have Paid',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 20),
-                
-                Container(
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: Colors.yellow.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.yellow.shade300),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '📋 Payment Instructions:',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text('1. Open Google Pay, PhonePe or any UPI app'),
-                      Text('2. Tap on "Scan QR Code"'),
-                      Text('3. Point camera at the QR code above'),
-                      Text('4. Pay exact amount: ₹200'),
-                      Text('5. Note down Transaction ID after payment'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          setState(() => _paymentMade = true);
-                          _showSuccess('Please enter Transaction ID after payment.');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: const Text(
-                          'I have Paid',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
