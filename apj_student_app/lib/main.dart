@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 
-// Screens
+// 🔹 Screens
 import 'screens/login/login_screen.dart';
 import 'screens/registration/registration_form_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/exam/exam_screen.dart';
 import 'screens/result/result_screen.dart';
 import 'screens/id_card/id_card_screen.dart';
+
+// ⚠️ NOTE:
+// syllabus / notice / profile screens abhi create nahi hui
+// isliye abhi import NAHI kar rahe
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,36 +30,52 @@ class StudentApp extends StatelessWidget {
     return MaterialApp(
       title: 'APJ Student App',
       debugShowCheckedModeBanner: false,
-      
-      // Theme setup
+
       theme: ThemeData(
-        primaryColor: const Color(0xFF4CAF50),
-        colorScheme: ColorScheme.fromSwatch(
-          primarySwatch: Colors.green,
-          accentColor: const Color(0xFF2196F3),
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF4CAF50),
         ),
         fontFamily: 'Roboto',
-        useMaterial3: true,
       ),
-      
-      // 🔐 App start hote hi LOGIN screen
+
+      // 🔐 Start screen
       initialRoute: '/login',
-      
+
       routes: {
-        // 🔑 Login Screen - WITHOUT const (StatefulWidget)
         '/login': (context) => LoginScreen(),
-        
-        // 📝 Login/Google Sign-in ke baad Registration Form
         '/register': (context) => RegistrationFormScreen(),
-        
-        // 🏠 Registration submit ke baad Dashboard - WITHOUT const (StatefulWidget)
         '/dashboard': (context) => DashboardScreen(),
-        
-        // 📚 Other screens - WITHOUT const
+
+        // 📘 Existing routes
         '/exam': (context) => ExamScreen(),
         '/result': (context) => ResultScreen(),
         '/idcard': (context) => IdCardScreen(),
+
+        // 🚧 TEMP PLACEHOLDER ROUTES (NO ERROR)
+        '/syllabus': (context) => _ComingSoonScreen(title: 'Syllabus'),
+        '/notice': (context) => _ComingSoonScreen(title: 'Notice'),
+        '/profile': (context) => _ComingSoonScreen(title: 'Profile'),
       },
+    );
+  }
+}
+
+// 🔹 TEMP SCREEN (jab tak real screen na bane)
+class _ComingSoonScreen extends StatelessWidget {
+  final String title;
+  const _ComingSoonScreen({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Text(
+          '$title screen coming soon',
+          style: const TextStyle(fontSize: 18),
+        ),
+      ),
     );
   }
 }
