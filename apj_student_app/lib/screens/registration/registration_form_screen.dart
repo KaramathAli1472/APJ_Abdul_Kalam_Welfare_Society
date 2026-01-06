@@ -3,8 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:math';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class RegistrationFormScreen extends StatefulWidget {
   const RegistrationFormScreen({super.key});
@@ -44,6 +45,11 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
   
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final ImagePicker _picker = ImagePicker();
+  
+  // Cloudinary Configuration
+  static const String _cloudName = 'drxe5e2nk';
+  static const String _uploadPreset = 'students_photos';
+  static const String _assetFolder = 'students';
   
   // Step titles
   final List<String> _stepTitles = ['Personal Info', 'Education', 'Contact', 'Payment'];
@@ -174,28 +180,85 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
   // Pick Image from Gallery
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) setState(() => _image = File(image.path));
+
+    if (image != null) {
+      print('✅ IMAGE SELECTED: ${image.path}');
+      setState(() {
+        _image = File(image.path);
+      });
+    } else {
+      print('❌ IMAGE NOT SELECTED');
+    }
   }
 
-  // Upload Image to Firebase Storage
+  // ✅✅✅ FIXED: Upload Image to CLOUDINARY ONLY (No Firebase Storage)
   Future<String> _uploadImage() async {
-    if (_image == null) return '';
-    
+    if (_image == null) {
+      print('❌ No image selected');
+      return '';
+    }
+
     try {
-      final currentUser = _auth.currentUser;
-      if (currentUser == null) {
-        print('User not authenticated for image upload');
+      print('☁️ Uploading image to Cloudinary...');
+      
+      // Direct Cloudinary upload
+      final cloudinaryUrl = await _uploadToCloudinary(_image!);
+      
+      if (cloudinaryUrl != null && cloudinaryUrl.isNotEmpty) {
+        print('✅ Cloudinary upload successful: $cloudinaryUrl');
+        return cloudinaryUrl;
+      } else {
+        print('❌ Cloudinary upload failed');
         return '';
       }
       
-      final storageRef = FirebaseStorage.instance.ref()
-          .child('student_photos')
-          .child('${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await storageRef.putFile(_image!);
-      return await storageRef.getDownloadURL();
     } catch (e) {
-      print('Error uploading image: $e');
+      print('❌ Image upload error: $e');
       return '';
+    }
+  }
+
+  // ✅ FIXED: Cloudinary Upload Function
+  Future<String?> _uploadToCloudinary(File imageFile) async {
+    try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'student_$timestamp.jpg';
+      
+      print('📸 Uploading: $fileName');
+      
+      final uri = Uri.parse('https://api.cloudinary.com/v1_1/$_cloudName/image/upload');
+      
+      var request = http.MultipartRequest('POST', uri)
+        ..fields['upload_preset'] = _uploadPreset
+        ..fields['folder'] = _assetFolder
+        ..fields['public_id'] = fileName;
+      
+      // Add image file
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          imageFile.path,
+          filename: fileName,
+        ),
+      );
+      
+      var response = await request.send();
+      var responseData = await response.stream.bytesToString();
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(responseData);
+        final url = data['secure_url'];
+        print('✅ Cloudinary URL: $url');
+        return url;
+      } else {
+        print('❌ Cloudinary upload failed: ${response.statusCode}');
+        print('❌ Response: $responseData');
+        return null;
+      }
+      
+    } catch (e) {
+      print('❌ Cloudinary error: $e');
+      return null;
     }
   }
 
@@ -229,15 +292,15 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: Colors.white,
-        child: SingleChildScrollView( // ✅ ADDED SingleChildScrollView
+        child: SingleChildScrollView(
           child: Container(
-            padding: const EdgeInsets.all(20), // ✅ REDUCED padding
+            padding: const EdgeInsets.all(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Success Icon
                 Container(
-                  width: 70, // ✅ REDUCED size
+                  width: 70,
                   height: 70,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
@@ -246,7 +309,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                   ),
                   child: const Icon(
                     Icons.check_circle,
-                    size: 40, // ✅ REDUCED size
+                    size: 40,
                     color: Colors.green,
                   ),
                 ),
@@ -257,7 +320,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                 const Text(
                   '🎉 Registration Successful!',
                   style: TextStyle(
-                    fontSize: 18, // ✅ REDUCED font size
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.green,
                   ),
@@ -269,7 +332,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                 Text(
                   'Your ID Card No: $registrationNumber',
                   style: TextStyle(
-                    fontSize: 14, // ✅ REDUCED font size
+                    fontSize: 14,
                     color: Colors.blue.shade700,
                     fontWeight: FontWeight.w600,
                   ),
@@ -279,7 +342,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                 
                 // Important Note
                 Container(
-                  padding: const EdgeInsets.all(12), // ✅ REDUCED padding
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.amber.shade50,
                     borderRadius: BorderRadius.circular(10),
@@ -297,7 +360,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: Colors.orange,
-                                fontSize: 14, // ✅ REDUCED font size
+                                fontSize: 14,
                               ),
                             ),
                           ),
@@ -316,7 +379,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                 
                 // Credentials Box
                 Container(
-                  padding: const EdgeInsets.all(15), // ✅ REDUCED padding
+                  padding: const EdgeInsets.all(15),
                   decoration: BoxDecoration(
                     color: Colors.blue.shade50,
                     borderRadius: BorderRadius.circular(10),
@@ -330,13 +393,13 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                         '📧 Student Email:',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 14, // ✅ REDUCED font size
+                          fontSize: 14,
                           color: Colors.blue,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Container(
-                        padding: const EdgeInsets.all(10), // ✅ REDUCED padding
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(6),
@@ -345,12 +408,12 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                         child: Row(
                           children: [
                             Expanded(
-                              child: SingleChildScrollView( // ✅ ADDED for long email
+                              child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
                                 child: SelectableText(
                                   email,
                                   style: const TextStyle(
-                                    fontSize: 14, // ✅ REDUCED font size
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                     color: Colors.blue,
                                   ),
@@ -375,13 +438,13 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                         '🔐 Password:',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 14, // ✅ REDUCED font size
+                          fontSize: 14,
                           color: Colors.blue,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Container(
-                        padding: const EdgeInsets.all(10), // ✅ REDUCED padding
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(6),
@@ -390,12 +453,12 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                         child: Row(
                           children: [
                             Expanded(
-                              child: SingleChildScrollView( // ✅ ADDED for long password
+                              child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
                                 child: SelectableText(
                                   password,
                                   style: const TextStyle(
-                                    fontSize: 14, // ✅ REDUCED font size
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                     color: Colors.red,
                                   ),
@@ -420,7 +483,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                 
                 // Instructions
                 Container(
-                  padding: const EdgeInsets.all(12), // ✅ REDUCED padding
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.green.shade50,
                     borderRadius: BorderRadius.circular(10),
@@ -458,7 +521,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                           _shareCredentials(email, password);
                         },
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12), // ✅ REDUCED padding
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -482,7 +545,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
-                          padding: const EdgeInsets.symmetric(vertical: 12), // ✅ REDUCED padding
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -563,7 +626,7 @@ Note: Use these credentials to login to your student account.
                         child: Text(
                           'Scan QR Code to Pay',
                           style: TextStyle(
-                            fontSize: 16, // ✅ REDUCED
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: Colors.green,
                           ),
@@ -575,7 +638,7 @@ Note: Use these credentials to login to your student account.
                 const SizedBox(height: 15),
                 
                 Container(
-                  padding: const EdgeInsets.all(20), // ✅ REDUCED
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(15),
@@ -591,7 +654,7 @@ Note: Use these credentials to login to your student account.
                   child: Column(
                     children: [
                       Container(
-                        width: 220, // ✅ REDUCED
+                        width: 220,
                         height: 220,
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -627,7 +690,7 @@ Note: Use these credentials to login to your student account.
                       const SizedBox(height: 15),
                       
                       Container(
-                        padding: const EdgeInsets.all(12), // ✅ REDUCED
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Colors.yellow.shade50,
                           borderRadius: BorderRadius.circular(8),
@@ -743,9 +806,15 @@ Note: Use these credentials to login to your student account.
     }
   }
 
-  // ✅✅✅ FIXED: SUBMIT FORM WITH STUDENT CREDENTIALS ✅✅✅
+  // ✅✅✅ FIXED: SUBMIT FORM WITH CLOUDINARY
   Future<void> _submitForm() async {
     print('=== SUBMIT FORM STARTED ===');
+    
+    // ✅ PHOTO CHECK (VERY IMPORTANT)
+    if (_image == null) {
+      _showError('Please upload student photo');
+      return;
+    }
     
     final currentUser = _auth.currentUser;
     if (currentUser == null) {
@@ -771,18 +840,28 @@ Note: Use these credentials to login to your student account.
       _generatedStudentPassword = _generateStudentPassword(registrationNumber!);
       
       print('📝 Generated Student Credentials:');
-      print('📧 Email: $_generatedStudentEmail');       // e.g., s001@apj.org
-      print('🔑 Password: $_generatedStudentPassword'); // e.g., APJ@1234
-      print('🎫 Registration No: $registrationNumber'); // e.g., APJ241215001
+      print('📧 Email: $_generatedStudentEmail');
+      print('🔑 Password: $_generatedStudentPassword');
+      print('🎫 Registration No: $registrationNumber');
 
-      // Step 3: Create Firebase Auth Account for Student
+      // ✅ STEP 3: CLOUDINARY IMAGE UPLOAD
+      print('☁️ Starting Cloudinary upload...');
+      final uploadedPhotoUrl = await _uploadImage();
+      
+      // ✅ CHECK IF IMAGE UPLOAD SUCCESSFUL
+      if (uploadedPhotoUrl.isEmpty) {
+        setState(() => _isLoading = false);
+        _showError('Student photo upload failed. Please try again.');
+        return;
+      }
+
+      print('✅ Photo uploaded to Cloudinary: $uploadedPhotoUrl');
+
+      // ✅ STEP 4: STUDENT AUTH ACCOUNT
       final studentAuthUid = await _createStudentAuthAccount(
         _generatedStudentEmail!, 
         _generatedStudentPassword!
       );
-
-      // Step 4: Upload Photo
-      final uploadedPhotoUrl = await _uploadImage();
       
       if (selectedDate == null) {
         _showError('Date of birth required');
@@ -807,17 +886,17 @@ Note: Use these credentials to login to your student account.
         'grade': gradeController.text.trim(),
         'phone': phoneController.text.trim(),
         'whatsapp': whatsappController.text.isEmpty ? phoneController.text.trim() : whatsappController.text.trim(),
-        'email': _generatedStudentEmail, // ✅ Student's login email
+        'email': _generatedStudentEmail,
         'address': addressController.text.trim(),
         'photoUrl': uploadedPhotoUrl,
         'registrationNumber': registrationNumber,
         'transactionID': transactionIdController.text.trim(),
-        'studentEmail': _generatedStudentEmail, // For reference
-        'studentPassword': _generatedStudentPassword, // Store encrypted in production
-        'studentAuthUid': studentAuthUid, // Firebase Auth UID
-        'parentEmail': currentUser.email ?? emailController.text.trim(), // Parent/guardian email
+        'studentEmail': _generatedStudentEmail,
+        'studentPassword': _generatedStudentPassword,
+        'studentAuthUid': studentAuthUid,
+        'parentEmail': currentUser.email ?? emailController.text.trim(),
         'paymentStatus': 'verified',
-        'parentUserId': currentUser.uid, // Parent's Firebase UID
+        'parentUserId': currentUser.uid,
         'createdAt': DateTime.now().toIso8601String(),
         'updatedAt': DateTime.now().toIso8601String(),
         'status': 'active',
@@ -828,7 +907,7 @@ Note: Use these credentials to login to your student account.
 
       await FirebaseFirestore.instance
           .collection('students')
-          .doc(studentAuthUid) // ✅ Use student's auth UID as document ID
+          .doc(studentAuthUid)
           .set(studentData, SetOptions(merge: true));
 
       // Step 6: Save to admin panel
@@ -883,7 +962,7 @@ Note: Use these credentials to login to your student account.
       
       _showSuccess('Registration completed! ID Card generated.');
       
-      // Show credentials dialog - user MUST see this
+      // Show credentials dialog
       _showStudentCredentialsDialog(_generatedStudentEmail!, _generatedStudentPassword!);
       
     } catch (e) {
@@ -1009,7 +1088,7 @@ Note: Use these credentials to login to your student account.
               child: Padding(
                 padding: const EdgeInsets.only(right: 16),
                 child: CircleAvatar(
-                  radius: 14, // ✅ REDUCED
+                  radius: 14,
                   backgroundColor: Colors.green.shade100,
                   child: Text(
                     currentUser.email?.substring(0, 1).toUpperCase() ?? 'U',
@@ -1024,7 +1103,7 @@ Note: Use these credentials to login to your student account.
         _buildStepper(),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.all(12), // ✅ REDUCED padding
+            padding: const EdgeInsets.all(12),
             child: SingleChildScrollView(
               controller: _scrollController,
               child: Form(
@@ -1034,8 +1113,8 @@ Note: Use these credentials to login to your student account.
                     // User info banner
                     if (currentUser != null)
                       Container(
-                        margin: const EdgeInsets.only(bottom: 15), // ✅ REDUCED
-                        padding: const EdgeInsets.all(10), // ✅ REDUCED
+                        margin: const EdgeInsets.only(bottom: 15),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: currentUser.providerData.any((userInfo) => 
                               userInfo.providerId == 'google.com') 
@@ -1053,7 +1132,7 @@ Note: Use these credentials to login to your student account.
                           children: [
                             Icon(
                               Icons.account_circle, 
-                              size: 20, // ✅ REDUCED
+                              size: 20,
                               color: currentUser.providerData.any((userInfo) => 
                                   userInfo.providerId == 'google.com') 
                                 ? Colors.blue 
@@ -1067,7 +1146,7 @@ Note: Use these credentials to login to your student account.
                                   Text(
                                     '${currentUser.providerData.any((userInfo) => userInfo.providerId == 'google.com') ? 'Google User:' : 'Email User:'} ${currentUser.email}',
                                     style: TextStyle(
-                                      fontSize: 12, // ✅ REDUCED
+                                      fontSize: 12,
                                       color: currentUser.providerData.any((userInfo) => 
                                           userInfo.providerId == 'google.com') 
                                         ? Colors.blue 
@@ -1093,7 +1172,7 @@ Note: Use these credentials to login to your student account.
                       ),
                     
                     _buildStepContent(),
-                    const SizedBox(height: 30), // ✅ REDUCED
+                    const SizedBox(height: 30),
                     _buildNavigationButtons(),
                   ]
                 )
@@ -1122,7 +1201,7 @@ Note: Use these credentials to login to your student account.
 
   Widget _buildStepper() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12), // ✅ REDUCED
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white, 
         boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 2, offset: const Offset(0, 1))]
@@ -1133,7 +1212,7 @@ Note: Use these credentials to login to your student account.
           final isActive = _currentStep >= index;
           return Expanded(child: Column(children: [
             Container(
-              width: 32, // ✅ REDUCED
+              width: 32,
               height: 32,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
@@ -1146,7 +1225,7 @@ Note: Use these credentials to login to your student account.
             Text(
               _stepTitles[index], 
               style: TextStyle(
-                fontSize: 10, // ✅ REDUCED
+                fontSize: 10,
                 fontWeight: _currentStep == index ? FontWeight.bold : FontWeight.normal,
                 color: isActive ? const Color(0xFF4CAF50) : Colors.grey,
               ),
@@ -1196,7 +1275,7 @@ Note: Use these credentials to login to your student account.
           : _nextStep,
         style: ElevatedButton.styleFrom(
           backgroundColor: _currentStep == _stepTitles.length - 1 ? const Color(0xFF4CAF50) : const Color(0xFF2196F3),
-          padding: const EdgeInsets.symmetric(vertical: 14), // ✅ REDUCED
+          padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -1221,7 +1300,7 @@ Note: Use these credentials to login to your student account.
         GestureDetector(
           onTap: _pickImage,
           child: CircleAvatar(
-            radius: 50, // ✅ REDUCED
+            radius: 50,
             backgroundColor: Colors.grey.shade100,
             backgroundImage: _image != null 
                 ? FileImage(_image!)
@@ -1334,7 +1413,7 @@ Note: Use these credentials to login to your student account.
       const SizedBox(height: 6),
       TextFormField(
         controller: addressController,
-        maxLines: 3, // ✅ REDUCED from 4
+        maxLines: 3,
         decoration: InputDecoration(
           hintText: 'Enter your complete address', 
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),

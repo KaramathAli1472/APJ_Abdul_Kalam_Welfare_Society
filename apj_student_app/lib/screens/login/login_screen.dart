@@ -4,8 +4,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,10 +18,6 @@ class _LoginScreenState extends State<LoginScreen> {
     scopes: ['email', 'profile'],
   );
   
-  static const String _cloudName = 'drxe5e2nk';
-  static const String _uploadPreset = 'students_photos';
-  static const String _assetFolder = 'students';
-  
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   
@@ -31,18 +25,16 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isGoogleLoading = false;
   bool _isWakeLockEnabled = false;
-  bool _rememberMe = false; // ✅ NEW: Remember Me checkbox
+  bool _rememberMe = false;
 
   @override
   void initState() {
     super.initState();
     print('🚀 Login Screen Loaded');
     _initWakeLock();
-    _loadSavedCredentials(); // ✅ NEW: Load saved credentials
-    _checkAutoLogin();
+    _loadSavedCredentials();
   }
 
-  // ✅ NEW: Load saved credentials from SharedPreferences
   Future<void> _loadSavedCredentials() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -62,26 +54,23 @@ class _LoginScreenState extends State<LoginScreen> {
         _rememberMe = rememberMe;
       });
       
-      print('📝 Loaded saved credentials - Remember Me: $_rememberMe');
+      print('📝 Loaded saved credentials');
       
     } catch (e) {
       print('⚠️ Error loading saved credentials: $e');
     }
   }
 
-  // ✅ NEW: Save credentials to SharedPreferences
   Future<void> _saveCredentials(String email, String password) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       
       if (_rememberMe) {
-        // Save email and password
         await prefs.setString('savedEmail', email);
         await prefs.setString('savedPassword', password);
         await prefs.setBool('rememberMe', true);
-        print('💾 Credentials saved for Remember Me');
+        print('💾 Credentials saved');
       } else {
-        // Clear saved credentials
         await prefs.remove('savedEmail');
         await prefs.remove('savedPassword');
         await prefs.setBool('rememberMe', false);
@@ -89,202 +78,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       print('⚠️ Error saving credentials: $e');
-    }
-  }
-
-  // ✅ NEW: Clear saved credentials
-  Future<void> _clearSavedCredentials() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('savedEmail');
-      await prefs.remove('savedPassword');
-      await prefs.setBool('rememberMe', false);
-      setState(() {
-        _rememberMe = false;
-      });
-      print('🗑️ Cleared saved credentials');
-    } catch (e) {
-      print('⚠️ Error clearing credentials: $e');
-    }
-  }
-
-  // ✅ FIXED: Auto login check
-  Future<void> _checkAutoLogin() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-      
-      print('🔍 Auto Login Check: isLoggedIn = $isLoggedIn');
-      
-      if (!isLoggedIn) {
-        print('❌ No auto login - User not logged in');
-        return;
-      }
-      
-      final email = prefs.getString('userEmail');
-      final userId = prefs.getString('userId');
-      
-      print('📧 Email from prefs: $email');
-      print('🆔 User ID from prefs: $userId');
-      
-      if (email == null || email.isEmpty) {
-        print('❌ No email found');
-        await prefs.setBool('isLoggedIn', false);
-        return;
-      }
-      
-      await _handleUserLogin(email: email, userId: userId);
-      
-    } catch (e) {
-      print('⚠️ Auto login error: $e');
-    }
-  }
-
-  // ✅ NEW: Centralized login handling
-  Future<void> _handleUserLogin({String? email, String? userId}) async {
-    try {
-      final firestore = FirebaseFirestore.instance;
-      DocumentSnapshot? userDoc;
-      Map<String, dynamic>? userData;
-      
-      // ✅ FIXED: Check if this is a student email (sxxx@apj.org format)
-      if (email != null && email.endsWith('@apj.org') && email.startsWith('s')) {
-        print('🎓 Detected student email: $email');
-        
-        // ✅ METHOD 1: Search in students collection by studentEmail field
-        QuerySnapshot studentQuery = await firestore
-            .collection('students')
-            .where('studentEmail', isEqualTo: email)
-            .limit(1)
-            .get();
-        
-        if (studentQuery.docs.isNotEmpty) {
-          userDoc = studentQuery.docs.first;
-          userData = userDoc.data() as Map<String, dynamic>;
-          print('✅ Found student by studentEmail field');
-        }
-        // ✅ METHOD 2: Search by email field
-        else {
-          QuerySnapshot emailQuery = await firestore
-              .collection('students')
-              .where('email', isEqualTo: email)
-              .limit(1)
-              .get();
-          
-          if (emailQuery.docs.isNotEmpty) {
-            userDoc = emailQuery.docs.first;
-            userData = userDoc.data() as Map<String, dynamic>;
-            print('✅ Found student by email field');
-          }
-        }
-      }
-      // Regular user (parent/guardian)
-      else {
-        // Check by email first
-        if (email != null) {
-          QuerySnapshot emailQuery = await firestore
-              .collection('students')
-              .where('email', isEqualTo: email)
-              .limit(1)
-              .get();
-          
-          if (emailQuery.docs.isNotEmpty) {
-            userDoc = emailQuery.docs.first;
-            userData = userDoc.data() as Map<String, dynamic>;
-            print('✅ Found user by email');
-          }
-        }
-        // If not found by email, check by Firebase UID
-        if (userDoc == null && userId != null) {
-          QuerySnapshot uidQuery = await firestore
-              .collection('students')
-              .where('studentAuthUid', isEqualTo: userId)
-              .limit(1)
-              .get();
-          
-          if (uidQuery.docs.isEmpty) {
-            uidQuery = await firestore
-                .collection('students')
-                .where('firebaseUid', isEqualTo: userId)
-                .limit(1)
-                .get();
-          }
-          
-          if (uidQuery.docs.isNotEmpty) {
-            userDoc = uidQuery.docs.first;
-            userData = userDoc.data() as Map<String, dynamic>;
-            print('✅ Found user by UID');
-          }
-        }
-      }
-      
-      if (userData != null) {
-        final regNumber = userData['registrationNumber']?.toString();
-        final isRegistered = userData['isRegistered'] ?? false;
-        final accountType = userData['accountType'] ?? 'parent';
-        
-        print('🔢 Registration Number: $regNumber');
-        print('📝 isRegistered: $isRegistered');
-        print('👤 Account Type: $accountType');
-        
-        // ✅ STUDENT ACCOUNT: Always considered registered
-        if (email != null && email.endsWith('@apj.org') && email.startsWith('s')) {
-          print('✅ Student account detected - direct to dashboard');
-          
-          // Save all user data to SharedPreferences
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('userId', userDoc!.id);
-          await prefs.setString('registrationNumber', regNumber ?? '');
-          await prefs.setString('fullName', userData['name']?.toString() ?? '');
-          await prefs.setString('phone', userData['phone']?.toString() ?? '');
-          await prefs.setString('course', userData['grade']?.toString() ?? '');
-          await prefs.setString('userPhoto', userData['photoUrl']?.toString() ?? '');
-          await prefs.setString('userEmail', email);
-          await prefs.setBool('isRegistered', true);
-          await prefs.setString('firebaseUid', userData['studentAuthUid']?.toString() ?? '');
-          await prefs.setString('accountType', 'student');
-          await prefs.setBool('isLoggedIn', true);
-          
-          await Future.delayed(const Duration(milliseconds: 300));
-          
-          if (mounted) {
-            Navigator.pushReplacementNamed(context, '/dashboard');
-          }
-        }
-        // PARENT ACCOUNT: Check if registered
-        else if (regNumber != null && regNumber.isNotEmpty && isRegistered) {
-          print('✅ User fully registered, redirecting to dashboard');
-          
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('userId', userDoc!.id);
-          await prefs.setString('registrationNumber', regNumber);
-          await prefs.setString('fullName', userData['fullName']?.toString() ?? '');
-          await prefs.setString('phone', userData['phone']?.toString() ?? '');
-          await prefs.setString('course', userData['course']?.toString() ?? '');
-          await prefs.setString('userPhoto', userData['profilePhoto']?.toString() ?? '');
-          await prefs.setString('userEmail', userData['email']?.toString() ?? email ?? '');
-          await prefs.setBool('isRegistered', true);
-          await prefs.setString('firebaseUid', userData['firebaseUid']?.toString() ?? '');
-          await prefs.setString('accountType', 'parent');
-          await prefs.setBool('isLoggedIn', true);
-          
-          await Future.delayed(const Duration(milliseconds: 300));
-          
-          if (mounted) {
-            Navigator.pushReplacementNamed(context, '/dashboard');
-          }
-        } else {
-          print('⚠️ User not fully registered, clearing login');
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.clear();
-        }
-      } else {
-        print('❌ User not found in Firestore, clearing login');
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.clear();
-      }
-    } catch (e) {
-      print('⚠️ Error in handleUserLogin: $e');
     }
   }
 
@@ -312,76 +105,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<String?> _uploadToCloudinary(String imageUrl, {String? fileName}) async {
-    try {
-      print('☁️ Uploading image to Cloudinary...');
-      
-      if (imageUrl.contains('cloudinary.com')) {
-        print('✅ Image is already from Cloudinary');
-        return imageUrl;
-      }
-      
-      if (imageUrl.contains('blank-profile-picture')) {
-        print('📸 Using default profile picture');
-        return imageUrl;
-      }
-      
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final publicId = 'student_${timestamp}_${fileName ?? 'profile'}';
-      
-      final uri = Uri.parse('https://api.cloudinary.com/v1_1/$_cloudName/image/upload');
-      
-      var request = http.MultipartRequest('POST', uri)
-        ..fields['upload_preset'] = _uploadPreset
-        ..fields['folder'] = _assetFolder
-        ..fields['public_id'] = publicId;
-      
-      try {
-        final imageResponse = await http.get(Uri.parse(imageUrl));
-        if (imageResponse.statusCode == 200) {
-          request.files.add(
-            http.MultipartFile.fromBytes(
-              'file',
-              imageResponse.bodyBytes,
-              filename: 'profile_$timestamp.jpg',
-            ),
-          );
-        } else {
-          print('❌ Failed to download image from URL');
-          return imageUrl;
-        }
-      } catch (e) {
-        print('❌ Error downloading image: $e');
-        request.fields['file'] = imageUrl;
-      }
-      
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final secureUrl = data['secure_url'];
-        print('✅ Image uploaded to Cloudinary successfully!');
-        return secureUrl;
-      } else {
-        print('❌ Cloudinary upload failed: ${response.statusCode}');
-        return imageUrl;
-      }
-      
-    } catch (e) {
-      print('❌ Cloudinary upload error: $e');
-      return imageUrl;
-    }
-  }
-
-  // ✅ FIXED: Google Sign In
+  // ✅ SIMPLE GOOGLE SIGN IN
   Future<void> _signInWithGoogle() async {
     setState(() {
       _isGoogleLoading = true;
     });
 
     try {
-      print('🔄 Starting Google Sign In Process...');
+      print('🔄 Starting Google Sign In...');
       
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       
@@ -407,43 +138,21 @@ class _LoginScreenState extends State<LoginScreen> {
         print('📧 Email: ${user.email}');
         print('🆔 UID: ${user.uid}');
         
-        // Handle profile photo
-        String? profilePhotoUrl = user.photoURL;
-        String cloudinaryPhotoUrl = '';
-        
-        if (profilePhotoUrl == null || profilePhotoUrl.isEmpty) {
-          print('📸 No profile photo from Google, using default');
-          profilePhotoUrl = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
-          cloudinaryPhotoUrl = profilePhotoUrl;
-        } else {
-          final fileName = user.email?.split('@').first ?? 'profile';
-          final cloudinaryUrl = await _uploadToCloudinary(profilePhotoUrl, fileName: fileName);
-          cloudinaryPhotoUrl = cloudinaryUrl ?? profilePhotoUrl;
-        }
-        
-        // ✅ Save login status
+        // Save login status
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
         await prefs.setString('userEmail', user.email ?? '');
         await prefs.setString('userName', user.displayName ?? '');
-        await prefs.setString('userPhoto', cloudinaryPhotoUrl);
         await prefs.setString('userId', user.uid);
         await prefs.setString('loginMethod', 'google');
         
-        // ✅ IMPORTANT: Save user info in Firestore (Temporary until registration)
-        await _saveOrUpdateUserInFirestore(
-          email: user.email!,
-          uid: user.uid,
-          name: user.displayName ?? '',
-          photoUrl: cloudinaryPhotoUrl,
-        );
+        // Save photo
+        String profilePhotoUrl = user.photoURL ?? 
+            'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
+        await prefs.setString('userPhoto', profilePhotoUrl);
         
-        // Now check registration status
-        await _checkRegistrationAndNavigate(
-          email: user.email!,
-          userId: user.uid,
-          photoUrl: cloudinaryPhotoUrl,
-        );
+        // Check if user needs registration
+        await _checkUserRegistration(user.email!, user.uid);
       }
       
     } catch (error) {
@@ -453,7 +162,50 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ✅ FIXED: Email Sign In (WITH STUDENT SUPPORT & REMEMBER ME)
+  // ✅ SIMPLE CHECK USER REGISTRATION
+  Future<void> _checkUserRegistration(String email, String userId) async {
+    try {
+      print('🔍 Checking registration for: $email');
+      
+      final firestore = FirebaseFirestore.instance;
+      
+      // Check if this is a student email
+      if (email.endsWith('@apj.org') && email.startsWith('s')) {
+        print('🎓 Student email detected - going to dashboard');
+        _goToDashboard();
+        return;
+      }
+      
+      // For parent/guardian - check in Firestore
+      QuerySnapshot query = await firestore
+          .collection('students')
+          .where('parentUserId', isEqualTo: userId)
+          .limit(1)
+          .get();
+      
+      print('📊 Query results: ${query.docs.length}');
+      
+      if (query.docs.isNotEmpty) {
+        print('✅ User found in Firestore - going to dashboard');
+        _goToDashboard();
+      } else {
+        print('❌ User not found - going to registration');
+        _goToRegistration(email, userId);
+      }
+      
+    } catch (e) {
+      print('⚠️ Error checking registration: $e');
+      // On error, go to registration
+      _goToRegistration(email, userId);
+    } finally {
+      setState(() {
+        _isGoogleLoading = false;
+        _isLoading = false;
+      });
+    }
+  }
+
+  // ✅ EMAIL LOGIN
   void _signInWithEmail() {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -477,102 +229,38 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
     
-    // ✅ NEW: Save credentials if Remember Me is checked
+    // Save credentials
     _saveCredentials(email, password);
     
-    // ✅ FIXED: Special handling for student accounts
+    // Check if student email
     if (email.endsWith('@apj.org') && email.startsWith('s')) {
-      print('🎓 Student email login attempt: $email');
-      _handleStudentEmailLogin(email, password);
+      print('🎓 Student email login');
+      _handleStudentLogin(email, password);
     } else {
-      _handleRegularEmailLogin(email, password);
+      _handleRegularLogin(email, password);
     }
   }
 
-  // ✅ NEW: Handle student email login
-  Future<void> _handleStudentEmailLogin(String email, String password) async {
+  // ✅ STUDENT LOGIN
+  Future<void> _handleStudentLogin(String email, String password) async {
     try {
-      print('🎯 Attempting student login...');
-      
-      // Step 1: Sign in with Firebase Auth
       final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
       
       final user = userCredential.user;
-      if (user == null) {
-        throw FirebaseAuthException(code: 'user-not-found', message: 'Student not found');
-      }
-      
-      print('✅ Firebase Auth login successful for student');
-      
-      // Step 2: Check in Firestore
-      final firestore = FirebaseFirestore.instance;
-      
-      // Try to find student by studentEmail field
-      QuerySnapshot studentQuery = await firestore
-          .collection('students')
-          .where('studentEmail', isEqualTo: email)
-          .limit(1)
-          .get();
-      
-      DocumentSnapshot? studentDoc;
-      Map<String, dynamic>? studentData;
-      
-      if (studentQuery.docs.isNotEmpty) {
-        studentDoc = studentQuery.docs.first;
-        studentData = studentDoc.data() as Map<String, dynamic>;
-        print('✅ Found student in Firestore by studentEmail');
-      } else {
-        // Try by email field
-        QuerySnapshot emailQuery = await firestore
-            .collection('students')
-            .where('email', isEqualTo: email)
-            .limit(1)
-            .get();
+      if (user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isLoggedIn', true);
+        await prefs.setString('userEmail', email);
+        await prefs.setString('userId', user.uid);
+        await prefs.setString('loginMethod', 'email');
+        await prefs.setString('accountType', 'student');
         
-        if (emailQuery.docs.isNotEmpty) {
-          studentDoc = emailQuery.docs.first;
-          studentData = studentDoc.data() as Map<String, dynamic>;
-          print('✅ Found student in Firestore by email field');
-        }
+        print('✅ Student login successful');
+        _goToDashboard();
       }
-      
-      if (studentData == null) {
-        print('❌ Student not found in Firestore');
-        await _auth.signOut();
-        _showErrorDialog('Student account not found. Please contact administrator.');
-        setState(() { _isLoading = false; });
-        return;
-      }
-      
-      // Step 3: Save to SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isLoggedIn', true);
-      await prefs.setString('userEmail', email);
-      await prefs.setString('userId', studentDoc!.id);
-      await prefs.setString('loginMethod', 'email');
-      await prefs.setString('accountType', 'student');
-      await prefs.setString('registrationNumber', studentData['registrationNumber']?.toString() ?? '');
-      await prefs.setString('fullName', studentData['name']?.toString() ?? '');
-      await prefs.setString('phone', studentData['phone']?.toString() ?? '');
-      await prefs.setString('course', studentData['grade']?.toString() ?? '');
-      await prefs.setString('userPhoto', studentData['photoUrl']?.toString() ?? '');
-      await prefs.setString('firebaseUid', studentData['studentAuthUid']?.toString() ?? '');
-      await prefs.setBool('isRegistered', true);
-      
-      print('✅ Student login successful!');
-      
-      // Step 4: Navigate to dashboard
-      _showSnackBar('Welcome back!');
-      
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          setState(() { _isLoading = false; });
-          Navigator.pushReplacementNamed(context, '/dashboard');
-        }
-      });
       
     } catch (error) {
       print('❌ Student login error: $error');
@@ -581,25 +269,21 @@ class _LoginScreenState extends State<LoginScreen> {
       if (error.toString().contains('invalid-credential') || 
           error.toString().contains('wrong-password')) {
         _showErrorDialog('Invalid email or password');
-      } else if (error.toString().contains('user-not-found')) {
-        _showErrorDialog('Student account not found. Please check your email.');
       } else {
         _showErrorDialog('Login failed. Please try again.');
       }
     }
   }
 
-  // ✅ NEW: Handle regular email login (parents/guardians)
-  Future<void> _handleRegularEmailLogin(String email, String password) async {
+  // ✅ REGULAR LOGIN
+  Future<void> _handleRegularLogin(String email, String password) async {
     try {
       final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
       
-      print('✅ Email Login Successful!');
       final user = userCredential.user;
-      
       if (user != null) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
@@ -608,210 +292,51 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('loginMethod', 'email');
         await prefs.setString('accountType', 'parent');
         
-        final defaultPhoto = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
-        await prefs.setString('userPhoto', defaultPhoto);
-        
-        await _checkRegistrationAndNavigate(
-          email: email,
-          userId: user.uid,
-          photoUrl: defaultPhoto,
-        );
+        print('✅ Email login successful');
+        await _checkUserRegistration(email, user.uid);
       }
       
     } catch (error) {
-      print('❌ Email Login Error: $error');
-      _showErrorDialog('Login failed. Please check your credentials.');
+      print('❌ Email login error: $error');
       setState(() { _isLoading = false; });
+      _showErrorDialog('Login failed. Please check your credentials.');
     }
   }
 
-  // ✅ FIXED: Save or update user in Firestore
-  Future<void> _saveOrUpdateUserInFirestore({
-    required String email,
-    required String uid,
-    required String name,
-    required String photoUrl,
-  }) async {
-    try {
-      final firestore = FirebaseFirestore.instance;
-      
-      // Check if user already exists by email
-      QuerySnapshot emailQuery = await firestore
-          .collection('students')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-      
-      // Check if user already exists by Firebase UID
-      QuerySnapshot uidQuery = await firestore
-          .collection('students')
-          .where('firebaseUid', isEqualTo: uid)
-          .limit(1)
-          .get();
-      
-      Map<String, dynamic> userData = {
-        'email': email,
-        'firebaseUid': uid,
-        'fullName': name,
-        'profilePhoto': photoUrl,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'loginMethod': 'google',
-      };
-      
-      if (emailQuery.docs.isNotEmpty) {
-        // Update existing user
-        await emailQuery.docs.first.reference.update(userData);
-        print('✅ Updated existing user in Firestore');
-      } else if (uidQuery.docs.isNotEmpty) {
-        // Update existing user by UID
-        await uidQuery.docs.first.reference.update(userData);
-        print('✅ Updated existing user by UID in Firestore');
-      } else {
-        // Create new user
-        userData['createdAt'] = FieldValue.serverTimestamp();
-        userData['isRegistered'] = false;
-        userData['status'] = 'pending';
-        
-        await firestore.collection('students').add(userData);
-        print('✅ Created new user in Firestore');
-      }
-    } catch (e) {
-      print('⚠️ Error saving user to Firestore: $e');
-    }
-  }
-
-  // ✅ FIXED: Check registration status
-  Future<void> _checkRegistrationAndNavigate({
-    required String email,
-    required String userId,
-    required String photoUrl,
-  }) async {
-    try {
-      print('🔍 Checking registration status for: $email');
-      
-      final firestore = FirebaseFirestore.instance;
-      
-      // Check by email
-      QuerySnapshot emailQuery = await firestore
-          .collection('students')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-      
-      // Check by Firebase UID
-      QuerySnapshot uidQuery = await firestore
-          .collection('students')
-          .where('firebaseUid', isEqualTo: userId)
-          .limit(1)
-          .get();
-      
-      print('📊 Email query results: ${emailQuery.docs.length}');
-      print('📊 UID query results: ${uidQuery.docs.length}');
-      
-      DocumentSnapshot? userDoc;
-      Map<String, dynamic>? userData;
-      
-      if (emailQuery.docs.isNotEmpty) {
-        userDoc = emailQuery.docs.first;
-        userData = userDoc.data() as Map<String, dynamic>;
-        print('✅ Found user by email');
-      } else if (uidQuery.docs.isNotEmpty) {
-        userDoc = uidQuery.docs.first;
-        userData = userDoc.data() as Map<String, dynamic>;
-        print('✅ Found user by UID');
-      }
-      
-      if (userData != null) {
-        final regNumber = userData['registrationNumber']?.toString();
-        final isRegistered = userData['isRegistered'] ?? false;
-        
-        print('🔢 Registration Number: $regNumber');
-        print('📝 isRegistered: $isRegistered');
-        
-        if (regNumber != null && regNumber.isNotEmpty && isRegistered) {
-          // ✅ USER IS REGISTERED - Go to dashboard
-          print('✅ User already registered, going to dashboard');
-          await _saveUserToPrefs(userData, userDoc!.id, photoUrl);
-          _goToDashboard(userData['fullName'] ?? '');
-        } else {
-          // User exists but not registered
-          print('⚠️ User exists but not registered, going to registration');
-          
-          // Update profile photo if needed
-          if (userData['profilePhoto'] == null || userData['profilePhoto'].isEmpty) {
-            await userDoc!.reference.update({
-              'profilePhoto': photoUrl,
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
-          }
-          
-          _goToRegistration(email, photoUrl, userId);
-        }
-      } else {
-        // User not found - new user
-        print('👤 New user detected, going to registration');
-        _goToRegistration(email, photoUrl, userId);
-      }
-      
-    } catch (e) {
-      print('⚠️ Error checking registration: $e');
-      _goToRegistration(email, photoUrl, userId);
-    } finally {
-      setState(() {
-        _isGoogleLoading = false;
-        _isLoading = false;
-      });
-    }
-  }
-
-  // ✅ Save user data to SharedPreferences
-  Future<void> _saveUserToPrefs(Map<String, dynamic> studentData, String docId, String photoUrl) async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    await prefs.setString('userId', docId);
-    await prefs.setString('registrationNumber', studentData['registrationNumber']?.toString() ?? '');
-    await prefs.setString('fullName', studentData['fullName']?.toString() ?? '');
-    await prefs.setString('phone', studentData['phone']?.toString() ?? '');
-    await prefs.setString('course', studentData['course']?.toString() ?? '');
-    await prefs.setString('userPhoto', photoUrl);
-    await prefs.setString('userEmail', studentData['email']?.toString() ?? '');
-    await prefs.setString('firebaseUid', studentData['firebaseUid']?.toString() ?? '');
-    await prefs.setBool('isRegistered', true);
-    await prefs.setString('accountType', 'parent');
-    
-    print('💾 User data saved to SharedPreferences');
-  }
-
-  // ✅ Go to dashboard
-  void _goToDashboard(String userName) {
+  // ✅ GO TO DASHBOARD
+  void _goToDashboard() {
     print('✅ Going to dashboard...');
     
-    _showSnackBar('Welcome back${userName.isNotEmpty ? ', $userName' : ''}!');
+    _showSnackBar('Welcome back!');
     
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) {
+        setState(() {
+          _isGoogleLoading = false;
+          _isLoading = false;
+        });
         Navigator.pushReplacementNamed(context, '/dashboard');
       }
     });
   }
 
-  // ✅ Go to registration
-  void _goToRegistration(String email, String photoUrl, String userId) {
+  // ✅ GO TO REGISTRATION
+  void _goToRegistration(String email, String userId) {
     print('📝 Going to registration form...');
     
     SharedPreferences.getInstance().then((prefs) async {
       await prefs.setString('registerEmail', email);
       await prefs.setString('firebaseUid', userId);
-      await prefs.setString('registerPhoto', photoUrl);
-      await prefs.setBool('isNewUser', true);
-      await prefs.setBool('isRegistered', false);
-      await prefs.setString('accountType', 'parent');
     });
     
     _showSnackBar('Please complete registration');
     
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) {
+        setState(() {
+          _isGoogleLoading = false;
+          _isLoading = false;
+        });
         Navigator.pushReplacementNamed(context, '/register');
       }
     });
@@ -894,10 +419,6 @@ class _LoginScreenState extends State<LoginScreen> {
         content: Text(message),
         backgroundColor: Colors.green,
         duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
       ),
     );
   }
@@ -961,7 +482,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 
-                const SizedBox(height: 05),
+                const SizedBox(height: 10),
                 const Column(
                   children: [
                     Text(
@@ -985,7 +506,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
                 
-                const SizedBox(height: 03),
+                const SizedBox(height: 20),
                 
                 // Email Field
                 TextField(
@@ -1004,7 +525,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 
-                const SizedBox(height: 05),
+                const SizedBox(height: 15),
                 
                 // Password Field
                 TextField(
@@ -1038,11 +559,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 
                 const SizedBox(height: 10),
                 
-                // ✅ NEW: Remember Me & Forgot Password Row
+                // Remember Me & Forgot Password
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Remember Me Checkbox
                     Row(
                       children: [
                         Checkbox(
@@ -1051,37 +571,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             setState(() {
                               _rememberMe = value!;
                             });
-                            // Save preference immediately
-                            SharedPreferences.getInstance().then((prefs) {
-                              prefs.setBool('rememberMe', _rememberMe);
-                            });
                           },
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
                         ),
-                        const Text(
-                          'Remember Me',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
-                        ),
+                        const Text('Remember Me'),
                       ],
                     ),
-                    
-                    // Forgot Password
                     TextButton(
                       onPressed: _forgetPassword,
-                      child: const Text(
-                        'Forgot Password?',
-                        style: TextStyle(color: Colors.blue),
-                      ),
+                      child: const Text('Forgot Password?'),
                     ),
                   ],
                 ),
                 
-                const SizedBox(height: 05),
+                const SizedBox(height: 20),
                 
                 // Login Button
                 SizedBox(
@@ -1108,7 +610,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 
-                const SizedBox(height: 10),
+                const SizedBox(height: 20),
                 
                 // OR Divider
                 Row(
@@ -1116,10 +618,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Expanded(child: Divider(color: Colors.grey[400])),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 15.0),
-                      child: Text(
-                        'OR SIGN IN WITH',
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
+                      child: Text('OR SIGN IN WITH'),
                     ),
                     Expanded(child: Divider(color: Colors.grey[400])),
                   ],
@@ -1145,45 +644,23 @@ class _LoginScreenState extends State<LoginScreen> {
                         : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Container(
+                              Image.network(
+                                'https://cdn-icons-png.flaticon.com/512/2991/2991148.png',
                                 width: 24,
                                 height: 24,
-                                child: Image.network(
-                                  'https://cdn-icons-png.flaticon.com/512/2991/2991148.png',
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Icon(Icons.g_mobiledata, color: Colors.red);
-                                  },
-                                ),
                               ),
                               const SizedBox(width: 12),
                               const Text(
                                 'SIGN IN WITH GOOGLE',
                                 style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
                                   color: Colors.red,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ],
                           ),
                   ),
                 ),
-                
-                const SizedBox(height: 10),
-                
-                // Clear Saved Credentials Button (Optional - for testing)
-                if (_emailController.text.isNotEmpty || _passwordController.text.isNotEmpty)
-                  TextButton(
-                    onPressed: _clearSavedCredentials,
-                    child: const Text(
-                      'Clear Saved Credentials',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
                 
                 const SizedBox(height: 10),
                 
@@ -1201,16 +678,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         onChanged: _toggleWakeLock,
                       ),
                       const SizedBox(width: 10),
-                      Column(
+                      const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _isWakeLockEnabled
-                                ? 'Screen Always ON'
-                                : 'Screen Normal',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            'Screen Always ON',
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          const Text(
+                          Text(
                             'Prevent screen sleep',
                             style: TextStyle(fontSize: 12),
                           ),
