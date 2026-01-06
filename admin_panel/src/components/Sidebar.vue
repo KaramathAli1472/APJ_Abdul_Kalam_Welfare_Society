@@ -89,32 +89,7 @@
             </router-link>
           </li>
 
-          <!-- 🔥 NEW: ID Cards Section -->
-          <div class="nav-divider" v-if="!isCollapsed">
-            <span>ID Card Section</span>
-          </div>
           
-          <!-- ID Cards Sub-menu -->
-          <div v-if="!isCollapsed" class="sub-menu">
-            <li class="nav-item sub-item">
-              <router-link to="/id-cards/generate" class="nav-link" active-class="active">
-                <span class="nav-icon">🖨️</span>
-                <span class="nav-text">Generate ID Cards</span>
-              </router-link>
-            </li>
-            <li class="nav-item sub-item">
-              <router-link to="/id-cards/manage" class="nav-link" active-class="active">
-                <span class="nav-icon">✏️</span>
-                <span class="nav-text">Manage ID Cards</span>
-              </router-link>
-            </li>
-            <li class="nav-item sub-item">
-              <router-link to="/id-cards/print" class="nav-link" active-class="active">
-                <span class="nav-icon">🖨️</span>
-                <span class="nav-text">Print ID Cards</span>
-              </router-link>
-            </li>
-          </div>
 
           <!-- 🔥 NEW: More Results Options -->
           <div class="nav-divider" v-if="!isCollapsed">
