@@ -55,11 +55,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       // 🔹 RESULTS
       final resultsSnap = await FirebaseFirestore.instance
-    .collection('results')
-    .where('studentId', isEqualTo: user.uid)
-    .where('approved', isEqualTo: true) // only approved
-    .get();
-totalResults = resultsSnap.docs.length;
+          .collection('results')
+          .where('studentId', isEqualTo: user.uid)
+          .get();
 
       // 🔹 EXAMS (SAFE QUERY)
       final examsSnap =
@@ -121,21 +119,68 @@ totalResults = resultsSnap.docs.length;
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Student Dashboard'),
+        title: const Text(
+          'Student Dashboard',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
+        ),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
+        centerTitle: true,
+        elevation: 4,
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout, size: 24),
             onPressed: _logout,
+            tooltip: 'Logout',
           )
         ],
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: Colors.indigo,
+                strokeWidth: 3,
+              ),
+            )
           : studentData == null
-              ? const Center(child: Text('No student data found'))
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 60,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No student data found',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: _fetchDashboardData,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
               : _dashboardBody(),
     );
   }
@@ -143,80 +188,67 @@ totalResults = resultsSnap.docs.length;
   // ================= DASHBOARD BODY =================
   Widget _dashboardBody() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _studentCard(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
+          const Text(
+            'Quick Access',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.indigo,
+            ),
+          ),
+          const SizedBox(height: 16),
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: 2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
+            crossAxisSpacing: 18,
+            mainAxisSpacing: 18,
+            childAspectRatio: 0.9,
             children: [
-              _item('Syllabus', Icons.menu_book,
-                  totalSyllabus.toString(), '/syllabus'),
-              _item(
-                  'Exams', Icons.assignment, totalExams.toString(), '/exam'),
+              _item('Syllabus', Icons.menu_book, totalSyllabus.toString(),
+                  '/syllabus', Colors.blue),
+              _item('Exams', Icons.assignment, totalExams.toString(), '/exam',
+                  Colors.green),
               _item('Notifications', Icons.notifications,
-                  totalNotifications.toString(), '/notice'),
-              _item('Results', Icons.bar_chart,
-                  totalResults.toString(), '/result'),
-              _item('ID Card', Icons.badge, '', '/idcard'),
-              _item('Profile', Icons.person, '', '/profile'),
+                  totalNotifications.toString(), '/notice', Colors.orange),
+              _item('Results', Icons.bar_chart, totalResults.toString(),
+                  '/result', Colors.purple),
+              _item('ID Card', Icons.badge_outlined, '', '/idcard',
+                  Colors.teal),
+              _item('Profile', Icons.person_outline, '', '/profile',
+                  Colors.pink),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  // ================= STUDENT CARD =================
-  Widget _studentCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: Colors.indigo.shade50,
-            backgroundImage:
-                photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-            child: photoUrl.isEmpty
-                ? const Icon(Icons.person,
-                    size: 30, color: Colors.indigo)
-                : null,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 30),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.indigo.shade50,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.indigo.shade100, width: 1),
+            ),
+            child: Row(
               children: [
-                Text(
-                  studentData!['name'] ?? '',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
+                Icon(
+                  Icons.info_outline,
+                  color: Colors.indigo.shade600,
+                  size: 22,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Reg No: ${studentData!['registrationNumber'] ?? ''}',
-                  style: const TextStyle(fontSize: 13, color: Colors.grey),
-                ),
-                Text(
-                  'Grade: ${studentData!['grade'] ?? ''}',
-                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Tap on any card to view details',
+                    style: TextStyle(
+                      color: Colors.indigo.shade700,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -226,26 +258,173 @@ totalResults = resultsSnap.docs.length;
     );
   }
 
+  // ================= STUDENT CARD =================
+  Widget _studentCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.indigo.shade600,
+            Colors.indigo.shade800,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.indigo.withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: CircleAvatar(
+              radius: 32,
+              backgroundColor: Colors.white,
+              backgroundImage:
+                  photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+              child: photoUrl.isEmpty
+                  ? Icon(
+                      Icons.person,
+                      size: 36,
+                      color: Colors.indigo.shade300,
+                    )
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  studentData!['name'] ?? 'No Name',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                _infoRow(
+                  Icons.badge,
+                  'Reg No: ${studentData!['registrationNumber'] ?? 'N/A'}',
+                ),
+                const SizedBox(height: 4),
+                _infoRow(
+                  Icons.school,
+                  'Grade: ${studentData!['grade'] ?? 'N/A'}',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String text) {
+  return Row(
+    children: [
+      Icon(icon, size: 16, color: Colors.white70),
+      const SizedBox(width: 8),
+      Expanded( // ✅ YEH LINE ADD KARO
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 14,
+          ),
+          maxLines: 2, // ✅ Optional: max lines add karo
+          overflow: TextOverflow.ellipsis, // ✅ Overflow handle karo
+        ),
+      ),
+    ],
+  );
+}
+
   // ================= ITEM =================
   Widget _item(
-      String title, IconData icon, String count, String route) {
+      String title, IconData icon, String count, String route, Color color) {
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
       onTap: () => Navigator.pushNamed(context, route),
-      child: Card(
-        elevation: 6,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.15),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 34, color: Colors.indigo),
-            const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 32,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 4),
             if (count.isNotEmpty)
-              Text(count,
-                  style:
-                      const TextStyle(fontSize: 12, color: Colors.grey)),
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  count,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ),
           ],
         ),
       ),

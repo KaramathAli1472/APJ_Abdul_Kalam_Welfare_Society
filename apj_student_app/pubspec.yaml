@@ -38,6 +38,7 @@ dependencies:
   intl: ^0.20.2
   syncfusion_flutter_pdfviewer: ^32.1.21
   url_launcher: ^6.3.2
+  cached_network_image: ^3.4.1
   webview_flutter: ^4.7.0
   webview_flutter_android: ^3.2.0
   webview_flutter_wkwebview: ^3.1.0
