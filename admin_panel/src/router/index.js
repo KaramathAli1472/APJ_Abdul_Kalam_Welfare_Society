@@ -10,7 +10,8 @@ import Students from "../views/Students.vue";
 import Exams from "../views/Exams.vue";
 import Payments from "../views/Payments.vue";
 import Notifications from "../views/Notifications.vue";
-import IDCard from "../views/IDCard.vue"; // 🔥 EXISTING ID Card component
+import IDCard from "../views/IDCard.vue"; 
+import ManageResults from "../views/results/ManageResults.vue"; // 🔹 Added Results view
 
 // Layout
 import AdminLayout from "../layouts/AdminLayout.vue";
@@ -40,16 +41,23 @@ const routes = [
       { path: "dashboard", component: Dashboard },
       { path: "students", component: Students },
       
-      // 🔥 ID Card Route
+      // ID Card Route
       { 
         path: "id-card", 
         component: IDCard,
         name: "IDCard"
       },
-      
+
       { path: "exams", component: Exams },
       { path: "payments", component: Payments },
       { path: "notifications", component: Notifications },
+
+      // 🔹 Results Route
+      {
+        path: "results",
+        component: ManageResults,
+        name: "ManageResults"
+      },
 
       // Syllabus routes
       { path: "syllabus/upload", component: UploadSyllabus },
@@ -80,3 +88,4 @@ router.beforeEach((to, from, next) => {
 });
 
 export default router;
+

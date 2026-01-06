@@ -12,6 +12,7 @@ import 'screens/result/result_screen.dart';
 import 'screens/id_card/id_card_screen.dart';
 // ✅ SyllabusScreen import (jo maine diya tha)
 import 'screens/Syllabus/syllabus_screen.dart';
+import 'screens/notifications/notifications_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,7 +48,7 @@ class StudentApp extends StatelessWidget {
 
         // ✅ Working routes
         '/syllabus': (context) => SyllabusScreen(),  // NO const!
-        '/notice': (context) => _ComingSoonScreen(title: 'Notifications'),
+        '/notice': (context) => const NotificationsScreen(),
         '/profile': (context) => _ComingSoonScreen(title: 'Profile'),
       },
     );

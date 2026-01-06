@@ -55,9 +55,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       // 🔹 RESULTS
       final resultsSnap = await FirebaseFirestore.instance
-          .collection('results')
-          .where('studentId', isEqualTo: user.uid)
-          .get();
+    .collection('results')
+    .where('studentId', isEqualTo: user.uid)
+    .where('approved', isEqualTo: true) // only approved
+    .get();
+totalResults = resultsSnap.docs.length;
 
       // 🔹 EXAMS (SAFE QUERY)
       final examsSnap =

@@ -256,7 +256,7 @@
                 </div>
               </div>
 
-              <!-- 🔹 QuestionForm (Collapsible) -->
+              <!-- 🔹 Questions Management Section (Inline) -->
               <div 
                 v-if="openQuestions === exam.id" 
                 class="questions-section"
@@ -270,7 +270,98 @@
                     <span class="icon">✖️</span>
                   </button>
                 </div>
-                <QuestionForm :examId="exam.id" />
+
+                <!-- Add Question Form -->
+                <div class="add-question-form">
+                  <div class="form-group">
+                    <label class="form-label">Question Type</label>
+                    <select v-model="newQuestion.type" class="form-input">
+                      <option value="MCQ">MCQ</option>
+                      <option value="ShortAnswer">Short Answer</option>
+                      <option value="TrueFalse">True/False</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Question Text</label>
+                    <textarea 
+                      v-model="newQuestion.questionText" 
+                      class="form-input"
+                      rows="3"
+                      placeholder="Enter question..."
+                    ></textarea>
+                  </div>
+
+                  <!-- MCQ Options -->
+                  <div v-if="newQuestion.type === 'MCQ'" class="mcq-options">
+                    <div v-for="opt in ['A', 'B', 'C', 'D']" :key="opt" class="option-row">
+                      <label class="option-label">{{ opt }}.</label>
+                      <input 
+                        v-model="newQuestion.options[opt]" 
+                        class="form-input"
+                        :placeholder="'Option ' + opt"
+                      />
+                      <label class="correct-option">
+                        <input 
+                          type="radio" 
+                          v-model="newQuestion.correctAnswer" 
+                          :value="opt"
+                        />
+                        Correct
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- True/False -->
+                  <div v-if="newQuestion.type === 'TrueFalse'" class="truefalse-options">
+                    <label>
+                      <input type="radio" v-model="newQuestion.correctAnswer" value="true" />
+                      True
+                    </label>
+                    <label>
+                      <input type="radio" v-model="newQuestion.correctAnswer" value="false" />
+                      False
+                    </label>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Marks</label>
+                    <input 
+                      type="number" 
+                      v-model="newQuestion.marks" 
+                      class="form-input"
+                      min="1"
+                    />
+                  </div>
+
+                  <button class="add-question-btn" @click="addQuestionToExam(exam.id)">
+                    Add Question
+                  </button>
+                </div>
+
+                <!-- Existing Questions List -->
+                <div v-if="exam.questions && exam.questions.length > 0" class="existing-questions">
+                  <h5>Existing Questions ({{ exam.questions.length }})</h5>
+                  <div class="question-list">
+                    <div 
+                      v-for="(q, index) in exam.questions" 
+                      :key="index"
+                      class="question-item"
+                    >
+                      <div class="question-text">
+                        <strong>Q{{ index + 1 }}:</strong> {{ q.questionText }}
+                        <span class="question-type">({{ q.type }})</span>
+                        <span class="question-marks">{{ q.marks }} marks</span>
+                      </div>
+                      <button 
+                        class="remove-question-btn"
+                        @click="removeQuestionFromExam(exam.id, index)"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -292,11 +383,9 @@
 
 <script>
 import { getExams, addExam, updateExam, deleteExamById } from "../services/examService";
-import QuestionForm from "../components/QuestionForm.vue";
 
 export default {
   name: "Exams",
-  components: { QuestionForm },
   data() {
     return {
       exams: [],
@@ -309,7 +398,14 @@ export default {
       filterCourse: "",
       showStats: true,
       openQuestions: null,
-      loading: false
+      loading: false,
+      newQuestion: {
+        type: "MCQ",
+        questionText: "",
+        options: { A: "", B: "", C: "", D: "" },
+        correctAnswer: "",
+        marks: 1
+      }
     };
   },
   computed: {
@@ -367,7 +463,7 @@ export default {
         course: this.course,
         duration: Number(this.duration),
         dateTime: new Date(this.dateTime),
-        questions: [],
+        questions: [], // ✅ Questions array added directly in exam document
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -408,6 +504,16 @@ export default {
       this.duration = 30;
       this.dateTime = "";
       this.editingExamId = null;
+      this.resetNewQuestionForm();
+    },
+    resetNewQuestionForm() {
+      this.newQuestion = {
+        type: "MCQ",
+        questionText: "",
+        options: { A: "", B: "", C: "", D: "" },
+        correctAnswer: "",
+        marks: 1
+      };
     },
     async deleteExam(examId) {
       if (!confirm("Are you sure you want to delete this exam? This action cannot be undone.")) {
@@ -425,6 +531,74 @@ export default {
     },
     toggleQuestions(examId) {
       this.openQuestions = this.openQuestions === examId ? null : examId;
+      this.resetNewQuestionForm();
+    },
+    async addQuestionToExam(examId) {
+      if (!this.newQuestion.questionText.trim()) {
+        this.showNotification("Please enter question text", "error");
+        return;
+      }
+
+      if (this.newQuestion.type === "MCQ" && !this.newQuestion.correctAnswer) {
+        this.showNotification("Please select correct answer for MCQ", "error");
+        return;
+      }
+
+      const exam = this.exams.find(e => e.id === examId);
+      if (!exam) return;
+
+      const question = {
+        id: Date.now().toString(),
+        type: this.newQuestion.type,
+        questionText: this.newQuestion.questionText,
+        marks: Number(this.newQuestion.marks) || 1,
+        correctAnswer: this.newQuestion.correctAnswer
+      };
+
+      if (this.newQuestion.type === "MCQ") {
+        question.options = { ...this.newQuestion.options };
+      }
+
+      // Add question to exam's questions array
+      if (!exam.questions) {
+        exam.questions = [];
+      }
+      exam.questions.push(question);
+
+      try {
+        // Update exam in Firebase with new questions array
+        await updateExam(examId, {
+          questions: exam.questions,
+          updatedAt: new Date()
+        });
+        
+        this.showNotification("Question added successfully", "success");
+        this.resetNewQuestionForm();
+      } catch (err) {
+        console.error("Error adding question:", err);
+        this.showNotification("Failed to add question", "error");
+      }
+    },
+    async removeQuestionFromExam(examId, questionIndex) {
+      if (!confirm("Are you sure you want to remove this question?")) return;
+
+      const exam = this.exams.find(e => e.id === examId);
+      if (!exam || !exam.questions) return;
+
+      exam.questions.splice(questionIndex, 1);
+
+      try {
+        // Update exam in Firebase with updated questions array
+        await updateExam(examId, {
+          questions: exam.questions,
+          updatedAt: new Date()
+        });
+        
+        this.showNotification("Question removed successfully", "success");
+      } catch (err) {
+        console.error("Error removing question:", err);
+        this.showNotification("Failed to remove question", "error");
+      }
     },
     formatDate(timestamp) {
       if (!timestamp) return "-";
@@ -459,11 +633,9 @@ export default {
       return 'Ongoing';
     },
     exportToExcel() {
-      // Implement export functionality
       this.showNotification("Export feature coming soon!", "info");
     },
     showNotification(message, type = "info") {
-      // You can replace with your preferred notification system
       alert(`[${type.toUpperCase()}] ${message}`);
     }
   }
@@ -1036,6 +1208,123 @@ export default {
   transform: rotate(90deg);
 }
 
+/* ====== Add Question Form Styles ====== */
+.add-question-form {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.mcq-options {
+  margin: 15px 0;
+}
+
+.option-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.option-label {
+  min-width: 20px;
+  font-weight: bold;
+}
+
+.correct-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  color: #666;
+}
+
+.truefalse-options {
+  display: flex;
+  gap: 20px;
+  margin: 15px 0;
+}
+
+.truefalse-options label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.add-question-btn {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.add-question-btn:hover {
+  background: #2980b9;
+}
+
+/* ====== Existing Questions ====== */
+.existing-questions {
+  margin-top: 20px;
+}
+
+.existing-questions h5 {
+  margin: 0 0 15px;
+  color: #2c3e50;
+}
+
+.question-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.question-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  background: white;
+  margin-bottom: 5px;
+  border-radius: 4px;
+}
+
+.question-text {
+  flex: 1;
+}
+
+.question-type {
+  color: #666;
+  font-size: 12px;
+  margin-left: 10px;
+}
+
+.question-marks {
+  background: #e8f5e9;
+  color: #2E7D32;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  margin-left: 10px;
+}
+
+.remove-question-btn {
+  background: #ffebee;
+  color: #f44336;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.remove-question-btn:hover {
+  background: #ffcdd2;
+}
+
 /* ====== Empty State ====== */
 .empty-state {
   text-align: center;
@@ -1107,6 +1396,11 @@ export default {
   
   .search-filter {
     flex-direction: column;
+  }
+  
+  .option-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

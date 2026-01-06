@@ -31,49 +31,39 @@ class _ExamScreenState extends State<ExamScreen> {
     _loadExam();
   }
 
-  // ================= LOAD EXAM =================
   Future<void> _loadExam() async {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('exams')
-          .where('deleted', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
           .limit(1)
           .get();
 
-      if (snap.docs.isEmpty) {
-        throw Exception('No exam found');
-      }
+      if (snap.docs.isEmpty) throw Exception('No active exam found');
 
       final doc = snap.docs.first;
       final data = doc.data();
 
-      examId = doc.id;
-      examName = data['examName'] ?? 'Exam';
-      durationMinutes = (data['duration'] ?? 30).toInt();
-
-      final List rawQuestions = data['questions'] ?? [];
-      questions = rawQuestions
-          .map((q) => Map<String, dynamic>.from(q))
-          .toList();
-
-      secondsRemaining = durationMinutes * 60;
+      setState(() {
+        examId = doc.id;
+        examName = data['examName'] ?? 'Exam';
+        durationMinutes = (data['duration'] as num?)?.toInt() ?? 30;
+        questions = List<Map<String, dynamic>>.from(data['questions'] ?? []);
+        secondsRemaining = durationMinutes * 60;
+        isLoading = false;
+      });
 
       WakelockPlus.enable();
       _startTimer();
-
-      setState(() => isLoading = false);
     } catch (e) {
-      debugPrint('❌ Exam load error: $e');
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No exam available')),
+        const SnackBar(content: Text('No active exam available')),
       );
       Navigator.pop(context);
     }
   }
 
-  // ================= TIMER =================
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (secondsRemaining <= 0) {
@@ -84,40 +74,56 @@ class _ExamScreenState extends State<ExamScreen> {
     });
   }
 
-  // ================= SUBMIT EXAM =================
+  int _totalMarks() {
+    // Total marks = sum of all question marks, default 100
+    if (questions.isEmpty) return 100;
+    int total = 0;
+    for (var q in questions) {
+      total += (q['marks'] as num?)?.toInt() ?? 1;
+    }
+    return total;
+  }
+
   Future<void> _submitExam() async {
     _timer?.cancel();
     WakelockPlus.disable();
 
-    int score = 0;
+    int obtainedMarks = 0;
 
     for (int i = 0; i < questions.length; i++) {
-      if (selectedAnswers[i] ==
-          questions[i]['correctAnswer']) {
-        score++;
+      if (selectedAnswers[i] == questions[i]['correctAnswer']) {
+        obtainedMarks += (questions[i]['marks'] as num?)?.toInt() ?? 1;
       }
     }
+
+    final int totalMarks = _totalMarks();
+    final double percentage = totalMarks == 0
+        ? 0
+        : double.parse(((obtainedMarks / totalMarks) * 100).toStringAsFixed(2));
+    final bool isPass = percentage >= 85;
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       await FirebaseFirestore.instance.collection('results').add({
         'studentId': user.uid,
         'examId': examId,
-        'score': score,
-        'total': questions.length,
+        'examName': examName,
+        'obtainedMarks': obtainedMarks,
+        'totalMarks': totalMarks,
+        'percentage': percentage,
+        'result': isPass ? 'Pass' : 'Fail',
+        'approved': false,
         'submittedAt': Timestamp.now(),
       });
     }
 
     if (!mounted) return;
 
-    Navigator.pushReplacementNamed(
+    Navigator.pushReplacement(
       context,
-      '/result',
-      arguments: {
-        'score': score,
-        'total': questions.length,
-      },
+      MaterialPageRoute(
+        builder: (_) => const ResultPendingScreen(),
+      ),
     );
   }
 
@@ -128,7 +134,6 @@ class _ExamScreenState extends State<ExamScreen> {
     super.dispose();
   }
 
-  // ================= UI =================
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -137,14 +142,19 @@ class _ExamScreenState extends State<ExamScreen> {
       );
     }
 
+    if (questions.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: Text(examName)),
+        body: const Center(child: Text('No questions available')),
+      );
+    }
+
     final question = questions[currentIndex];
     final Map<String, dynamic> options =
-        Map<String, dynamic>.from(question['options']);
+        Map<String, dynamic>.from(question['options'] ?? {});
 
-    final minutes =
-        (secondsRemaining ~/ 60).toString().padLeft(2, '0');
-    final seconds =
-        (secondsRemaining % 60).toString().padLeft(2, '0');
+    final minutes = (secondsRemaining ~/ 60).toString().padLeft(2, '0');
+    final seconds = (secondsRemaining % 60).toString().padLeft(2, '0');
 
     return Scaffold(
       appBar: AppBar(
@@ -158,7 +168,6 @@ class _ExamScreenState extends State<ExamScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ⏱ TIMER
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -173,18 +182,11 @@ class _ExamScreenState extends State<ExamScreen> {
               ],
             ),
             const SizedBox(height: 20),
-
-            // ❓ QUESTION
             Text(
-              question['questionText'],
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              question['questionText'] ?? '',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-
-            // ✅ OPTIONS
             ...options.entries.map((entry) {
               return RadioListTile<String>(
                 value: entry.key,
@@ -197,38 +199,47 @@ class _ExamScreenState extends State<ExamScreen> {
                 },
               );
             }),
-
             const Spacer(),
-
-            // ⬅️ ➡️ CONTROLS
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 if (currentIndex > 0)
                   ElevatedButton(
-                    onPressed: () =>
-                        setState(() => currentIndex--),
+                    onPressed: () => setState(() => currentIndex--),
                     child: const Text('Previous'),
                   ),
-
                 if (currentIndex < questions.length - 1)
                   ElevatedButton(
-                    onPressed: () =>
-                        setState(() => currentIndex++),
+                    onPressed: () => setState(() => currentIndex++),
                     child: const Text('Next'),
                   ),
-
                 if (currentIndex == questions.length - 1)
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                     onPressed: _submitExam,
                     child: const Text('Submit'),
                   ),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class ResultPendingScreen extends StatelessWidget {
+  const ResultPendingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Result Status')),
+      body: const Center(
+        child: Text(
+          'Your exam has been submitted.\nResult will be available after admin approval.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16),
         ),
       ),
     );
