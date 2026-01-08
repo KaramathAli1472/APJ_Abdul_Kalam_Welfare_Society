@@ -13,169 +13,199 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  Map<String, dynamic>? studentData;
   bool isLoading = true;
   File? imageFile;
-
-  final nameController = TextEditingController();
-  final schoolController = TextEditingController();
+  Map<String, dynamic>? student;
 
   @override
   void initState() {
     super.initState();
-    _fetchProfile();
+    _fetchStudent();
   }
 
-  // ================= FETCH PROFILE =================
-  Future<void> _fetchProfile() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+  // ================= FETCH STUDENT =================
+  Future<void> _fetchStudent() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-      final snap = await FirebaseFirestore.instance
-          .collection('students')
-          .where('studentAuthUid', isEqualTo: user.uid)
-          .limit(1)
-          .get();
+    final snap = await FirebaseFirestore.instance
+        .collection('students')
+        .where('studentAuthUid', isEqualTo: user.uid)
+        .limit(1)
+        .get();
 
-      if (snap.docs.isEmpty) return;
-
-      studentData = snap.docs.first.data();
-      nameController.text = studentData!['name'];
-      schoolController.text = studentData!['school'];
-
-      setState(() => isLoading = false);
-    } catch (e) {
-      debugPrint('❌ Profile Fetch Error: $e');
+    if (snap.docs.isNotEmpty) {
+      student = snap.docs.first.data();
     }
+
+    setState(() => isLoading = false);
   }
 
   // ================= PICK IMAGE =================
   Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
+    final picked =
+    await ImagePicker().pickImage(source: ImageSource.gallery);
 
     if (picked != null) {
-      setState(() {
-        imageFile = File(picked.path);
-      });
+      setState(() => imageFile = File(picked.path));
     }
   }
 
-  // ================= UPDATE PROFILE =================
-  Future<void> _updateProfile() async {
-    try {
-      setState(() => isLoading = true);
+  // ================= UPDATE PHOTO =================
+  Future<void> _updatePhoto() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || imageFile == null) return;
 
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+    setState(() => isLoading = true);
 
-      String? imageUrl = studentData!['profilePhoto'];
+    final ref =
+    FirebaseStorage.instance.ref('students/profile_${user.uid}.jpg');
 
-      // 🔹 Upload Image
-      if (imageFile != null) {
-        final ref = FirebaseStorage.instance
-            .ref('student_profiles/${user.uid}.jpg');
+    await ref.putFile(imageFile!);
+    final photoUrl = await ref.getDownloadURL();
 
-        await ref.putFile(imageFile!);
-        imageUrl = await ref.getDownloadURL();
-      }
+    final snap = await FirebaseFirestore.instance
+        .collection('students')
+        .where('studentAuthUid', isEqualTo: user.uid)
+        .limit(1)
+        .get();
 
-      // 🔹 Update Firestore
-      final snap = await FirebaseFirestore.instance
-          .collection('students')
-          .where('studentAuthUid', isEqualTo: user.uid)
-          .limit(1)
-          .get();
+    await FirebaseFirestore.instance
+        .collection('students')
+        .doc(snap.docs.first.id)
+        .update({'photoUrl': photoUrl});
 
-      await FirebaseFirestore.instance
-          .collection('students')
-          .doc(snap.docs.first.id)
-          .update({
-        'name': nameController.text.trim(),
-        'school': schoolController.text.trim(),
-        'profilePhoto': imageUrl,
-      });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Profile photo updated')),
+    );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile Updated Successfully')),
-      );
+    _fetchStudent();
+  }
 
-      _fetchProfile();
-    } catch (e) {
-      debugPrint('❌ Update Error: $e');
-    } finally {
-      setState(() => isLoading = false);
-    }
+  // ================= ACADEMIC YEAR =================
+  String _academicYear() {
+    if (student?['createdAt'] == null) return '';
+    final date = DateTime.parse(student!['createdAt']);
+    return '${date.year} - ${date.year + 1}';
   }
 
   // ================= UI =================
   @override
   Widget build(BuildContext context) {
+    ImageProvider? profileImage;
+
+    if (imageFile != null) {
+      profileImage = FileImage(imageFile!);
+    } else if (student?['photoUrl'] != null &&
+        student!['photoUrl'].toString().isNotEmpty) {
+      profileImage = NetworkImage(student!['photoUrl']);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Profile'),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        centerTitle: true,
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _body(),
+          : SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // ===== PHOTO =====
+            GestureDetector(
+              onTap: _pickImage,
+              child: CircleAvatar(
+                radius: 55,
+                backgroundImage: profileImage,
+                child: profileImage == null
+                    ? const Icon(Icons.camera_alt, size: 30)
+                    : null,
+              ),
+            ),
+
+            if (imageFile != null)
+              TextButton.icon(
+                onPressed: _updatePhoto,
+                icon: const Icon(Icons.upload),
+                label: const Text('Update Photo'),
+              ),
+
+            const SizedBox(height: 20),
+
+            _card(
+              child: Column(
+                children: [
+                  _info('Student Name', student!['name']),
+                  _info('School Name', student!['school']),
+                  _info('Registration Number',
+                      student!['registrationNumber']),
+                  _info('Gender', student!['gender']),
+                  _info('Father Name', student!['fatherName']),
+                  _info('Email', student!['studentEmail']),
+                  _info('Class / Grade', student!['grade']),
+                  _info('Phone', student!['phone']),
+                  _info('Address', student!['address']),
+                  _info('Academic Year', _academicYear()),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _body() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
+  // ================= COMPONENTS =================
+
+  Widget _info(String title, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: _pickImage,
-            child: CircleAvatar(
-              radius: 55,
-              backgroundImage: imageFile != null
-                  ? FileImage(imageFile!)
-                  : (studentData!['profilePhoto'] != null &&
-                          studentData!['profilePhoto'] != '')
-                      ? NetworkImage(studentData!['profilePhoto'])
-                      : null,
-              child: studentData!['profilePhoto'] == null
-                  ? const Icon(Icons.camera_alt, size: 30)
-                  : null,
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          TextField(
-            controller: nameController,
-            decoration: const InputDecoration(
-              labelText: 'Full Name',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          TextField(
-            controller: schoolController,
-            decoration: const InputDecoration(
-              labelText: 'School',
-              border: OutlineInputBorder(),
-            ),
-          ),
-
-          const SizedBox(height: 30),
-
           SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.save),
-              label: const Text('Update Profile'),
-              onPressed: _updateProfile,
+            width: 140,
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value?.toString() ?? '',
+              softWrap: true,
+              maxLines: null,
+              overflow: TextOverflow.visible,
+              style: const TextStyle(fontSize: 14),
             ),
           ),
         ],
       ),
     );
   }
-}
 
+  Widget _card({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}

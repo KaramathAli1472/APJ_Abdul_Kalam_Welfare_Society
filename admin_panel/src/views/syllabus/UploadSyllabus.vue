@@ -7,7 +7,7 @@
         </div>
         <div>
           <h2 class="page-title">Upload Syllabus</h2>
-          <p class="page-subtitle">Upload syllabus for different classes and courses</p>
+          <p class="page-subtitle">Upload syllabus for different grades and courses</p>
         </div>
       </div>
     </div>
@@ -25,24 +25,24 @@
       </div>
 
       <form @submit.prevent="upload" class="upload-form">
-        <!-- Class Selection -->
+        <!-- Grade Selection -->
         <div class="form-group">
-          <label for="class" class="form-label">
-            Class/Standard
+          <label for="grade" class="form-label">
+            Grade
             <span class="required">*</span>
           </label>
           <select
-            v-model="selectedClass"
-            id="class"
+            v-model="selectedGrade"
+            id="grade"
             required
             class="form-input"
           >
-            <option value="">Select Class</option>
-            <option v-for="classOption in classOptions" :key="classOption.value" :value="classOption.value">
-              {{ classOption.label }}
+            <option value="">Select Grade</option>
+            <option v-for="gradeOption in gradeOptions" :key="gradeOption.value" :value="gradeOption.value">
+              {{ gradeOption.label }}
             </option>
           </select>
-          <div class="input-hint">Select the class for this syllabus</div>
+          <div class="input-hint">Select the grade for this syllabus</div>
         </div>
 
         <!-- Course Name -->
@@ -142,8 +142,8 @@
                 </div>
                 <div v-if="uploadProgress > 0" class="upload-progress">
                   <div class="progress-bar">
-                    <div 
-                      class="progress-fill" 
+                    <div
+                      class="progress-fill"
                       :style="{ width: uploadProgress + '%' }"
                     ></div>
                   </div>
@@ -178,14 +178,14 @@
             type="button"
             class="btn btn-secondary"
             @click="resetForm"
-            :disabled="!selectedClass && !course && !file"
+            :disabled="!selectedGrade && !course && !file"
           >
             Clear All
           </button>
           <button
             type="submit"
             class="btn btn-primary"
-            :disabled="!selectedClass || !course || !file || !validateFile() || isUploading"
+            :disabled="!selectedGrade || !course || !file || !validateFile() || isUploading"
             :class="{ 'loading': isUploading }"
           >
             <span v-if="!isUploading" class="btn-content">
@@ -203,7 +203,7 @@
       <div class="upload-hint">
         <div class="hint-icon">💡</div>
         <p>
-          <strong>Tip:</strong> Make sure to select the correct class and course name for better organization.
+          <strong>Tip:</strong> Make sure to select the correct grade and course name for better organization.
           Use high-quality images for better readability.
         </p>
       </div>
@@ -216,11 +216,11 @@
         <h3>Upload Successful!</h3>
         <p>Your syllabus image has been uploaded to Cloudinary and saved to Firebase.</p>
         <div class="success-details">
-          <p><strong>Class:</strong> {{ getClassLabel(selectedClass) }}</p>
+          <p><strong>Grade:</strong> {{ getGradeLabel(selectedGrade) }}</p>
           <p><strong>Course:</strong> {{ course }}</p>
           <p><strong>File:</strong> {{ uploadedFileName }}</p>
           <p><strong>Uploaded at:</strong> {{ new Date().toLocaleString() }}</p>
-          
+
           <!-- Image Preview -->
           <div v-if="uploadedFileUrl" class="image-preview-container">
             <h4>Image Preview:</h4>
@@ -285,7 +285,7 @@ const CLOUDINARY_UPLOAD_PRESET = 'syllabus';
 const uploadToCloudinary = async (file, onProgress = null) => {
   try {
     console.log('Starting Cloudinary upload for image:', file.name);
-    
+
     if (!file) {
       throw new Error('No file selected');
     }
@@ -299,7 +299,7 @@ const uploadToCloudinary = async (file, onProgress = null) => {
     // Check file type - only images
     const allowedExtensions = ['jpg', 'jpeg', 'png'];
     const fileExtension = file.name.split('.').pop().toLowerCase();
-    
+
     if (!allowedExtensions.includes(fileExtension)) {
       throw new Error('Invalid file type. Please upload JPG, JPEG, or PNG images only.');
     }
@@ -308,7 +308,7 @@ const uploadToCloudinary = async (file, onProgress = null) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    
+
     // Add timestamp for unique filename
     const timestamp = Date.now();
     const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
@@ -340,12 +340,12 @@ const uploadToCloudinary = async (file, onProgress = null) => {
       width: response.data.width,
       height: response.data.height
     });
-    
+
     return response.data;
-    
+
   } catch (error) {
     console.error('Cloudinary upload error:', error);
-    
+
     if (error.response) {
       console.error('Cloudinary response error:', error.response.data);
       throw new Error(`Image upload failed: ${error.response.data.error?.message || 'Unknown error'}`);
@@ -359,14 +359,14 @@ const uploadToCloudinary = async (file, onProgress = null) => {
 
 export default {
   name: 'SyllabusUpload',
-  
+
   setup() {
     // Form fields
-    const selectedClass = ref('');
+    const selectedGrade = ref('');
     const course = ref('');
     const file = ref(null);
     const selectedFormat = ref('image');
-    
+
     // UI states
     const dragover = ref(false);
     const isUploading = ref(false);
@@ -374,38 +374,37 @@ export default {
     const uploadSuccess = ref(false);
     const errorMessage = ref('');
     const showImageModal = ref(false);
-    
+
     // Upload results
     const uploadedFileName = ref('');
     const uploadedFileUrl = ref('');
-    
+
     // Refs
     const fileInput = ref(null);
-    
-    // Class options
-    const classOptions = [
-      { value: '1', label: 'Class 1' },
-      { value: '2', label: 'Class 2' },
-      { value: '3', label: 'Class 3' },
-      { value: '4', label: 'Class 4' },
-      { value: '5', label: 'Class 5' },
-      { value: '6', label: 'Class 6' },
-      { value: '7', label: 'Class 7' },
-      { value: '8', label: 'Class 8' },
-      { value: '9', label: 'Class 9' },
-      { value: '10', label: 'Class 10' },
-      
+
+    // Grade options
+    const gradeOptions = [
+      { value: '1', label: 'Grade 1' },
+      { value: '2', label: 'Grade 2' },
+      { value: '3', label: 'Grade 3' },
+      { value: '4', label: 'Grade 4' },
+      { value: '5', label: 'Grade 5' },
+      { value: '6', label: 'Grade 6' },
+      { value: '7', label: 'Grade 7' },
+      { value: '8', label: 'Grade 8' },
+      { value: '9', label: 'Grade 9' },
+      { value: '10', label: 'Grade 10' },
     ];
-    
+
     // Format options - only image
     const formatOptions = [
       { value: 'image', name: 'Image File', icon: '🖼️', extensions: '.jpg, .jpeg, .png' }
     ];
 
-    // Get class label from value
-    const getClassLabel = (classValue) => {
-      const classObj = classOptions.find(c => c.value === classValue);
-      return classObj ? classObj.label : classValue;
+    // Get grade label from value
+    const getGradeLabel = (gradeValue) => {
+      const gradeObj = gradeOptions.find(g => g.value === gradeValue);
+      return gradeObj ? gradeObj.label : gradeValue;
     };
 
     // Format selection
@@ -468,10 +467,10 @@ export default {
 
     const handleFile = (e) => {
       errorMessage.value = '';
-      
+
       if (e.target.files.length > 0) {
         const selectedFile = e.target.files[0];
-        
+
         if (selectedFile.size > 10 * 1024 * 1024) {
           showToast('Image size must be less than 10MB', 'error');
           e.target.value = '';
@@ -505,15 +504,15 @@ export default {
       e.preventDefault();
       dragover.value = false;
       const files = e.dataTransfer.files;
-      
+
       if (files.length > 0) {
         const droppedFile = files[0];
-        
+
         if (droppedFile.size > 10 * 1024 * 1024) {
           showToast('Image size must be less than 10MB', 'error');
           return;
         }
-        
+
         file.value = droppedFile;
 
         if (validateFile()) {
@@ -543,7 +542,7 @@ export default {
 
     // Form reset
     const resetForm = () => {
-      selectedClass.value = '';
+      selectedGrade.value = '';
       course.value = '';
       selectedFormat.value = 'image';
       removeFile();
@@ -585,37 +584,56 @@ export default {
     const saveToFirebase = async (cloudinaryResponse) => {
       try {
         const user = auth.currentUser;
-        
+
+        const cleanGrade = selectedGrade.value.trim();
+
         const uploadData = {
-          className: selectedClass.value,
-          classLabel: getClassLabel(selectedClass.value),
-          courseName: course.value,
+          // Main filter field
+          grade: cleanGrade,
+
+          // Display information
+          gradeLabel: getGradeLabel(cleanGrade),
+
+          courseName: course.value.trim(),
+
           fileName: file.value.name,
           fileSize: file.value.size,
           fileType: 'image',
           fileExtension: getFileExtension(),
+
           cloudinaryUrl: cloudinaryResponse.secure_url,
           cloudinaryPublicId: cloudinaryResponse.public_id,
+
           format: cloudinaryResponse.format,
           bytes: cloudinaryResponse.bytes,
           width: cloudinaryResponse.width,
           height: cloudinaryResponse.height,
           resourceType: cloudinaryResponse.resource_type,
-          createdAt: serverTimestamp(),
-          uploadedBy: user ? user.uid : 'anonymous',
-          uploadedByName: user ? (user.displayName || user.email) : 'Anonymous',
+
           status: 'completed',
+          academicYear: new Date().getFullYear(),
+
+          createdAt: serverTimestamp(),
           timestamp: new Date().toISOString(),
-          academicYear: new Date().getFullYear()
+
+          uploadedBy: user ? user.uid : 'anonymous',
+          uploadedByName: user
+            ? (user.displayName || user.email)
+            : 'Anonymous',
         };
 
-        console.log('Saving to Firebase:', uploadData);
-        
-        const docRef = await addDoc(collection(db, 'syllabusUploads'), uploadData);
-        console.log('Document written with ID:', docRef.id);
+        console.log('✅ Saving syllabus with grade:', uploadData);
+
+        const docRef = await addDoc(
+          collection(db, 'syllabusUploads'),
+          uploadData
+        );
+
+        console.log('✅ Firestore document ID:', docRef.id);
         return docRef.id;
+
       } catch (error) {
-        console.error('Error adding document to Firebase:', error);
+        console.error('❌ Firebase save error:', error);
         throw error;
       }
     };
@@ -623,8 +641,8 @@ export default {
     // Upload function
     const upload = async () => {
       // Validation
-      if (!selectedClass.value) {
-        showToast('Please select a class!', 'error');
+      if (!selectedGrade.value) {
+        showToast('Please select a grade!', 'error');
         return;
       }
 
@@ -650,10 +668,10 @@ export default {
 
       try {
         showToast('Uploading image to Cloudinary...', 'info');
-        
+
         // Upload to Cloudinary
         const cloudinaryResponse = await uploadToCloudinary(
-          file.value, 
+          file.value,
           (progress) => {
             uploadProgress.value = progress;
           }
@@ -666,16 +684,16 @@ export default {
         // Save to Firebase
         showToast('Saving to database...', 'info');
         await saveToFirebase(cloudinaryResponse);
-        
+
         // Update UI with results
         uploadedFileName.value = file.value.name;
         uploadedFileUrl.value = cloudinaryResponse.secure_url;
-        
+
         showToast(`✅ Syllabus image uploaded successfully!`, 'success');
-        
+
         uploadSuccess.value = true;
-        
-        // Reset form but keep class and course for reference
+
+        // Reset form but keep grade and course for reference
         file.value = null;
         uploadProgress.value = 0;
         if (fileInput.value) {
@@ -722,11 +740,11 @@ export default {
 
     return {
       // Form data
-      selectedClass,
+      selectedGrade,
       course,
       file,
       selectedFormat,
-      
+
       // UI states
       dragover,
       isUploading,
@@ -734,20 +752,20 @@ export default {
       uploadSuccess,
       errorMessage,
       showImageModal,
-      
+
       // Upload results
       uploadedFileName,
       uploadedFileUrl,
-      
+
       // Refs
       fileInput,
-      
+
       // Options
-      classOptions,
+      gradeOptions,
       formatOptions,
-      
+
       // Functions
-      getClassLabel,
+      getGradeLabel,
       selectFormat,
       getAcceptExtensions,
       getFormatIcon,

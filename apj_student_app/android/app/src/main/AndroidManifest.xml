@@ -1,15 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Wake Lock Permission for screen always on feature -->
+    <!-- ================= PERMISSIONS ================= -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    
-    <!-- Internet Permission for Google Sign In -->
     <uses-permission android:name="android.permission.INTERNET" />
-    
-    <!-- Network State Permission for checking connectivity -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- ================= APP ================= -->
     <application
         android:label="apj_student_app"
         android:icon="@mipmap/ic_launcher"
@@ -26,16 +23,17 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:windowSoftInputMode="adjustResize">
 
-            <!-- Optional SplashScreen for Flutter -->
+            <!-- Splash Screen -->
             <meta-data
                 android:name="io.flutter.embedding.android.SplashScreenDrawable"
                 android:resource="@drawable/launch_background" />
 
-            <!-- Flutter normal theme -->
+            <!-- Normal Theme -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
 
+            <!-- Launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -52,7 +50,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Required for Google Sign In -->
+        <!-- Google Play Services -->
         <meta-data
             android:name="com.google.android.gms.version"
             android:value="@integer/google_play_services_version" />
@@ -61,20 +59,38 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
     </application>
 
-    <!-- Required for text processing plugins -->
+    <!-- ================= QUERIES (VERY IMPORTANT) ================= -->
+    <!-- Android 11+ ke liye -->
     <queries>
+
+        <!-- TEXT PROCESSING -->
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-        
-        <!-- For Google Sign In -->
+
+        <!-- GOOGLE SIGN IN -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="https" android:host="accounts.google.com" />
+            <data android:scheme="https"
+                android:host="accounts.google.com" />
         </intent>
+
+        <!-- EMAIL (MAILTO FIX) -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO"/>
+            <data android:scheme="mailto"/>
+        </intent>
+
+        <!-- BROWSER (OPTIONAL BUT GOOD) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+
     </queries>
 
 </manifest>

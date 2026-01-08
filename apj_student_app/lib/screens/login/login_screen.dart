@@ -17,10 +17,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
   );
-  
+
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  
+
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   bool _isGoogleLoading = false;
@@ -41,21 +41,21 @@ class _LoginScreenState extends State<LoginScreen> {
       final savedEmail = prefs.getString('savedEmail');
       final savedPassword = prefs.getString('savedPassword');
       final rememberMe = prefs.getBool('rememberMe') ?? false;
-      
+
       if (savedEmail != null && savedEmail.isNotEmpty) {
         _emailController.text = savedEmail;
       }
-      
+
       if (savedPassword != null && savedPassword.isNotEmpty) {
         _passwordController.text = savedPassword;
       }
-      
+
       setState(() {
         _rememberMe = rememberMe;
       });
-      
+
       print('📝 Loaded saved credentials');
-      
+
     } catch (e) {
       print('⚠️ Error loading saved credentials: $e');
     }
@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _saveCredentials(String email, String password) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       if (_rememberMe) {
         await prefs.setString('savedEmail', email);
         await prefs.setString('savedPassword', password);
@@ -93,7 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _isWakeLockEnabled = value;
     });
-    
+
     try {
       if (value) {
         await WakelockPlus.enable();
@@ -113,31 +113,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       print('🔄 Starting Google Sign In...');
-      
+
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
+
       if (googleUser == null) {
         print('❌ Google Sign In cancelled');
         setState(() { _isGoogleLoading = false; });
         return;
       }
-      
+
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      
+
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      
+
       final UserCredential userCredential = await _auth.signInWithCredential(credential);
       final User? user = userCredential.user;
-      
+
       if (user != null) {
         print('✅ Google Sign In Successful!');
         print('👤 Name: ${user.displayName}');
         print('📧 Email: ${user.email}');
         print('🆔 UID: ${user.uid}');
-        
+
         // Save login status
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
@@ -145,16 +145,16 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('userName', user.displayName ?? '');
         await prefs.setString('userId', user.uid);
         await prefs.setString('loginMethod', 'google');
-        
+
         // Save photo
-        String profilePhotoUrl = user.photoURL ?? 
+        String profilePhotoUrl = user.photoURL ??
             'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
         await prefs.setString('userPhoto', profilePhotoUrl);
-        
+
         // Check if user needs registration
         await _checkUserRegistration(user.email!, user.uid);
       }
-      
+
     } catch (error) {
       print('❌ Google Sign In Error: $error');
       _showSnackBar('Google Sign In failed. Please try again.');
@@ -166,25 +166,25 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _checkUserRegistration(String email, String userId) async {
     try {
       print('🔍 Checking registration for: $email');
-      
+
       final firestore = FirebaseFirestore.instance;
-      
+
       // Check if this is a student email
       if (email.endsWith('@apj.org') && email.startsWith('s')) {
         print('🎓 Student email detected - going to dashboard');
         _goToDashboard();
         return;
       }
-      
+
       // For parent/guardian - check in Firestore
       QuerySnapshot query = await firestore
           .collection('students')
           .where('parentUserId', isEqualTo: userId)
           .limit(1)
           .get();
-      
+
       print('📊 Query results: ${query.docs.length}');
-      
+
       if (query.docs.isNotEmpty) {
         print('✅ User found in Firestore - going to dashboard');
         _goToDashboard();
@@ -192,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
         print('❌ User not found - going to registration');
         _goToRegistration(email, userId);
       }
-      
+
     } catch (e) {
       print('⚠️ Error checking registration: $e');
       // On error, go to registration
@@ -209,29 +209,29 @@ class _LoginScreenState extends State<LoginScreen> {
   void _signInWithEmail() {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
-    
+
     if (email.isEmpty) {
       _showErrorDialog('Please enter your email');
       return;
     }
-    
+
     if (password.isEmpty) {
       _showErrorDialog('Please enter your password');
       return;
     }
-    
+
     if (!email.contains('@') || !email.contains('.')) {
       _showErrorDialog('Please enter a valid email address');
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
     });
-    
+
     // Save credentials
     _saveCredentials(email, password);
-    
+
     // Check if student email
     if (email.endsWith('@apj.org') && email.startsWith('s')) {
       print('🎓 Student email login');
@@ -248,7 +248,7 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       );
-      
+
       final user = userCredential.user;
       if (user != null) {
         final prefs = await SharedPreferences.getInstance();
@@ -257,21 +257,92 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('userId', user.uid);
         await prefs.setString('loginMethod', 'email');
         await prefs.setString('accountType', 'student');
-        
+
+        // 🔥 NEW: Extract and save student grade from email
+        await _saveStudentGrade(email);
+
         print('✅ Student login successful');
         _goToDashboard();
       }
-      
+
     } catch (error) {
       print('❌ Student login error: $error');
       setState(() { _isLoading = false; });
-      
-      if (error.toString().contains('invalid-credential') || 
+
+      if (error.toString().contains('invalid-credential') ||
           error.toString().contains('wrong-password')) {
         _showErrorDialog('Invalid email or password');
       } else {
         _showErrorDialog('Login failed. Please try again.');
       }
+    }
+  }
+
+  // 🔥 NEW FUNCTION: Extract and save student grade from email
+  Future<void> _saveStudentGrade(String email) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Extract grade from student email pattern
+      // Example: s7john@apj.org → grade = "7"
+      // Example: s8mary@apj.org → grade = "8"
+
+      String grade = '7'; // Default fallback
+
+      if (email.startsWith('s') && email.contains('@apj.org')) {
+        try {
+          // Extract number after 's' and before '@'
+          String withoutPrefix = email.substring(1); // Remove 's'
+          int atIndex = withoutPrefix.indexOf('@');
+          if (atIndex > 0) {
+            String possibleNumber = withoutPrefix.substring(0, atIndex);
+            // Extract first number sequence
+            String extractedGrade = '';
+            for (int i = 0; i < possibleNumber.length; i++) {
+              if (possibleNumber[i].contains(RegExp(r'[0-9]'))) {
+                extractedGrade += possibleNumber[i];
+              } else {
+                break; // Stop at first non-number character
+              }
+            }
+
+            if (extractedGrade.isNotEmpty) {
+              grade = extractedGrade;
+            }
+          }
+        } catch (e) {
+          print('⚠️ Error extracting grade from email: $e');
+        }
+      }
+
+      // Also try to get grade from Firestore
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('students')
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+
+        if (userDoc.docs.isNotEmpty) {
+          final studentData = userDoc.docs.first.data();
+          final firestoreGrade = studentData['grade']?.toString();
+          if (firestoreGrade != null && firestoreGrade.isNotEmpty) {
+            grade = firestoreGrade;
+          }
+        }
+      } catch (e) {
+        print('⚠️ Error fetching grade from Firestore: $e');
+      }
+
+      // Save grade to SharedPreferences
+      await prefs.setString('studentGrade', grade);
+      print('✅ Saved student grade: $grade for email: $email');
+
+    } catch (e) {
+      print('⚠️ Error saving student grade: $e');
+      // Set default grade on error
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('studentGrade', '7');
     }
   }
 
@@ -282,7 +353,7 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       );
-      
+
       final user = userCredential.user;
       if (user != null) {
         final prefs = await SharedPreferences.getInstance();
@@ -291,11 +362,11 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('userId', user.uid);
         await prefs.setString('loginMethod', 'email');
         await prefs.setString('accountType', 'parent');
-        
+
         print('✅ Email login successful');
         await _checkUserRegistration(email, user.uid);
       }
-      
+
     } catch (error) {
       print('❌ Email login error: $error');
       setState(() { _isLoading = false; });
@@ -306,9 +377,9 @@ class _LoginScreenState extends State<LoginScreen> {
   // ✅ GO TO DASHBOARD
   void _goToDashboard() {
     print('✅ Going to dashboard...');
-    
+
     _showSnackBar('Welcome back!');
-    
+
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) {
         setState(() {
@@ -323,14 +394,14 @@ class _LoginScreenState extends State<LoginScreen> {
   // ✅ GO TO REGISTRATION
   void _goToRegistration(String email, String userId) {
     print('📝 Going to registration form...');
-    
+
     SharedPreferences.getInstance().then((prefs) async {
       await prefs.setString('registerEmail', email);
       await prefs.setString('firebaseUid', userId);
     });
-    
+
     _showSnackBar('Please complete registration');
-    
+
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) {
         setState(() {
@@ -375,7 +446,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 _showErrorDialog('Please enter a valid email');
                 return;
               }
-              
+
               _auth.sendPasswordResetEmail(email: email).then((_) {
                 Navigator.pop(context);
                 _showSnackBar('Password reset link sent to $email');
@@ -441,7 +512,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 20),
-                
+
                 // Logo
                 Center(
                   child: Container(
@@ -481,7 +552,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 10),
                 const Column(
                   children: [
@@ -505,16 +576,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 20),
-                
+
                 // Email Field
                 TextField(
                   controller: _emailController,
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.email_outlined, color: Colors.blue),
                     labelText: 'Email Address',
-                    hintText: 'student@example.com',
+                    hintText: 'student@apj.org',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -524,9 +595,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 15),
-                
+
                 // Password Field
                 TextField(
                   controller: _passwordController,
@@ -534,8 +605,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: const Icon(Icons.lock_outlined, color: Colors.blue),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _isPasswordVisible 
-                            ? Icons.visibility_outlined 
+                        _isPasswordVisible
+                            ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined,
                         color: Colors.blue,
                       ),
@@ -556,9 +627,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   obscureText: !_isPasswordVisible,
                 ),
-                
+
                 const SizedBox(height: 10),
-                
+
                 // Remember Me & Forgot Password
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -582,9 +653,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 20),
-                
+
                 // Login Button
                 SizedBox(
                   width: double.infinity,
@@ -600,18 +671,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
                         : const Text(
-                            'SIGN IN',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
+                      'SIGN IN',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 20),
-                
+
                 // OR Divider
                 Row(
                   children: [
@@ -623,9 +694,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     Expanded(child: Divider(color: Colors.grey[400])),
                   ],
                 ),
-                
+
                 const SizedBox(height: 20),
-                
+
                 // Google Button
                 SizedBox(
                   width: double.infinity,
@@ -642,28 +713,28 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: _isGoogleLoading
                         ? const CircularProgressIndicator(color: Colors.red)
                         : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Image.network(
-                                'https://cdn-icons-png.flaticon.com/512/2991/2991148.png',
-                                width: 24,
-                                height: 24,
-                              ),
-                              const SizedBox(width: 12),
-                              const Text(
-                                'SIGN IN WITH GOOGLE',
-                                style: TextStyle(
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Image.network(
+                          'https://cdn-icons-png.flaticon.com/512/2991/2991148.png',
+                          width: 24,
+                          height: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'SIGN IN WITH GOOGLE',
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
                           ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 10),
-                
+
                 // WakeLock
                 Container(
                   padding: const EdgeInsets.all(12),

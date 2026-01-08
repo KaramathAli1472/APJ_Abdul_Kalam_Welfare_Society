@@ -223,6 +223,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Colors.teal),
               _item('Profile', Icons.person_outline, '', '/profile',
                   Colors.pink),
+              _item('Contact Us', Icons.support_agent, '', '/contact', Colors.indigo),
             ],
           ),
           const SizedBox(height: 30),
@@ -267,8 +268,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Colors.indigo.shade600,
-            Colors.indigo.shade800,
+            Colors.indigo.shade400,
+            Colors.indigo.shade400,
           ],
         ),
         borderRadius: BorderRadius.circular(20),

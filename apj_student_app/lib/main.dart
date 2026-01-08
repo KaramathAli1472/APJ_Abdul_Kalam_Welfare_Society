@@ -13,6 +13,10 @@ import 'screens/id_card/id_card_screen.dart';
 // ✅ SyllabusScreen import (jo maine diya tha)
 import 'screens/Syllabus/syllabus_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
+import 'screens/profile/profile_screen.dart';
+import 'screens/contact/contact.dart';
+import 'screens/about_us/about_us.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,7 +53,9 @@ class StudentApp extends StatelessWidget {
         // ✅ Working routes
         '/syllabus': (context) => SyllabusScreen(),  // NO const!
         '/notice': (context) => const NotificationsScreen(),
-        '/profile': (context) => _ComingSoonScreen(title: 'Profile'),
+        '/profile': (context) => const ProfileScreen(),
+        '/contact': (context) => ContactUsScreen(), // no const
+        '/about': (context) => const AboutUsScreen(),
       },
     );
   }
